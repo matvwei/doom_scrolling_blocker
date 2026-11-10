@@ -1,0 +1,276 @@
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: #14141a;
+  color: #f5f5f7;
+}
+
+.options {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px 20px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.options-loading {
+  padding: 48px;
+  text-align: center;
+  color: #8b8b98;
+}
+
+.options__header h1 {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.options__header p {
+  font-size: 14px;
+  color: #8b8b98;
+}
+
+.options__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.card {
+  padding: 20px;
+  border-radius: 14px;
+  background: #1d1d24;
+  border: 1px solid #2c2c36;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.card__title {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label,
+.field__label {
+  font-size: 13px;
+  color: #b9b9c4;
+}
+
+.field__label {
+  font-weight: 600;
+}
+
+.radio-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.radio input {
+  accent-color: #2e6be6;
+}
+
+.options__custom {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.options__custom-head h2 {
+  font-size: 20px;
+  margin-bottom: 6px;
+}
+
+.options__custom-head p {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #8b8b98;
+}
+
+.options__custom-head code {
+  background: #2c2c36;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 12px;
+}
+
+.add-site {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(220px, 2fr) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 16px;
+  border-radius: 14px;
+  background: #1d1d24;
+  border: 1px dashed #3a3a46;
+}
+
+.add-site__error {
+  margin-top: -8px;
+}
+
+.card--custom {
+  border-color: #3a3a46;
+}
+
+.card__head-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.button--danger {
+  background: #3a2530;
+  color: #ff8a8e;
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
+.button--danger:hover {
+  background: #4d2e3c;
+}
+
+.field input,
+.field select,
+.field textarea {
+  font: inherit;
+  font-size: 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #3a3a46;
+  background: #14141a;
+  color: #f5f5f7;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  outline: 2px solid #2e6be6;
+  outline-offset: -1px;
+}
+
+.field textarea {
+  resize: vertical;
+}
+
+.field__error {
+  font-size: 12px;
+  color: #e5484d;
+}
+
+.options__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.button {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 11px 20px;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.button--primary {
+  background: #2e6be6;
+  color: #fff;
+}
+
+.button--secondary {
+  background: #2c2c36;
+  color: #f5f5f7;
+}
+
+.button:hover {
+  filter: brightness(1.12);
+}
+
+.status {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.status--ok {
+  color: #46a758;
+}
+
+.status--error {
+  color: #e5484d;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex: none;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.switch__slider {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: #3a3a46;
+  transition: background 0.15s ease;
+}
+
+.switch__slider::before {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 3px;
+  top: 3px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s ease;
+}
+
+.switch input:checked + .switch__slider {
+  background: #2e6be6;
+}
+
+.switch input:checked + .switch__slider::before {
+  transform: translateX(20px);
+}

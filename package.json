@@ -1,0 +1,38 @@
+{
+  "name": "doomscroll-blocker",
+  "description": "Браузерное расширение против doomscrolling: лимиты времени для YouTube Shorts, Instagram Reels и TikTok",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "dev:firefox": "wxt -b firefox",
+    "build": "wxt build",
+    "build:edge": "wxt build -b edge",
+    "zip": "wxt zip",
+    "compile": "tsc --noEmit",
+    "postinstall": "wxt prepare",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "node e2e/e2e.mjs"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.5.2",
+    "@types/chrome": "^0.0.300",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.7.0",
+    "@wxt-dev/module-react": "^1.2.2",
+    "jsdom": "^26.1.0",
+    "playwright": "^1.65.0",
+    "typescript": "~5.9.3",
+    "vitest": "^3.2.7",
+    "wxt": "^0.21.5"
+  }
+}
