@@ -53,6 +53,24 @@ export async function requestPermissionsForSites(
   return api.request({ origins: missing }).catch(() => false);
 }
 
+/**
+ * true, если для всех переданных сайтов нужные host permissions уже выданы.
+ * Позволяет UI понять, что сохранение пройдёт без нативного prompt.
+ */
+export async function permissionsSatisfied(
+  sites: readonly CustomSiteConfig[],
+): Promise<boolean> {
+  const api = getPermissionsApi();
+  if (!api) return sites.length === 0;
+  for (const site of sites) {
+    const pattern = sitePermissionPattern(site);
+    if (!pattern) return false;
+    const granted = await api.contains({ origins: [pattern] }).catch(() => false);
+    if (!granted) return false;
+  }
+  return true;
+}
+
 // Постоянные host_permissions манифеста: их нельзя отозвать через
 // permissions.remove (Chrome вернёт ошибку), поэтому не пытаемся.
 const BUILTIN_HOSTS = ['www.youtube.com', 'm.youtube.com', 'www.instagram.com', 'instagram.com', 'www.tiktok.com', 'tiktok.com'];

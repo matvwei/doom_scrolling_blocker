@@ -2,7 +2,7 @@
   "name": "doomscroll-blocker",
   "description": "Браузерное расширение против doomscrolling: лимиты времени для YouTube Shorts, Instagram Reels и TikTok",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "scripts": {
     "dev": "wxt",

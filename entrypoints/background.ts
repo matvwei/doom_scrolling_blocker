@@ -15,7 +15,8 @@ import {
 import { isCloseTabMessage, isTabStateMessage, type OverlayMessage } from '../core/messages';
 import { classifyUrl } from '../core/matching';
 import { builtinLabel, isServiceId } from '../core/services';
-import { CONFIG_KEY, loadConfig, loadState, saveState, type StoredState } from '../adapters/storage';
+import { CONFIG_KEY, clearPendingConfig, loadConfig, loadState, saveState, type StoredState } from '../adapters/storage';
+import { tryResumePendingConfig } from '../adapters/pendingResume';
 import {
   CONTENT_SCRIPT_FILE,
   injectContentScriptIntoTabsMatching,
@@ -501,7 +502,23 @@ export default defineBackground(() => {
 
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area !== 'local' || !changes[CONFIG_KEY]) return;
+      // Конфигурация изменилась (в т.ч. записью вне адаптера): черновик
+      // прерванного сохранения построен от устаревшего состояния —
+      // инвалидируем, чтобы auto-resume не перезаписал свежий config.
+      void clearPendingConfig();
       void loadConfig().then((loaded) => handleConfigChange(loaded));
+    });
+
+    // Сохранение, прерванное нативным prompt разрешений: popup закрывается
+    // на время показа запроса доступа, поэтому настройки сохранялись
+    // черновиком (dsb:pendingConfig). Когда доступ выдан — достраиваем
+    // сохранение без повторного клика; при отказе черновик ждёт в хранилище
+    // и настройки восстановят его при открытии. tryResumePendingConfig
+    // перечитывает черновик перед записью, поэтому параллельное сохранение
+    // config (которое инвалидирует черновик) не будет им перезаписано.
+    chrome.permissions.onAdded.addListener((added) => {
+      if (!added.origins?.length) return;
+      void tryResumePendingConfig().catch(() => false);
     });
 
     chrome.alarms.onAlarm.addListener((alarm) => {

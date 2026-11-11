@@ -48,6 +48,11 @@ export function installFakeChrome(initial: Record<string, unknown> = {}): FakeCh
           for (const [key, value] of Object.entries(items)) data.set(key, value);
           for (const listener of listeners) listener({}, 'local');
         },
+        remove: async (keys: string | string[]) => {
+          const list = Array.isArray(keys) ? keys : [keys];
+          for (const key of list) data.delete(key);
+          for (const listener of listeners) listener({}, 'local');
+        },
       },
       onChanged: {
         addListener: (listener: StorageListener) => {

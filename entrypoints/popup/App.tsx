@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import type { ExtensionConfig } from '../../core/config';
 import { emptyServiceState, remainingTime, type ServiceState } from '../../core/limits';
 import { builtinLabel, SERVICE_IDS } from '../../core/services';
 import { formatClock } from '../../core/time';
 import { useExtensionData } from '../../hooks/useExtensionData';
+import SettingsApp from '../../components/SettingsApp';
 
 function toggleService(config: ExtensionConfig, serviceId: (typeof SERVICE_IDS)[number]): ExtensionConfig {
   return {
@@ -32,9 +34,22 @@ function targetStats(
 
 export default function App() {
   const { config, state, saveConfig } = useExtensionData();
+  // Настройки открываются внутри popup (view), без отдельной страницы/вкладки.
+  // Полная страница options остаётся fallback через chrome://extensions.
+  const [view, setView] = useState<'dashboard' | 'settings'>('dashboard');
 
   if (!config || !state) {
     return <div className="popup-loading">Загрузка…</div>;
+  }
+
+  if (view === 'settings') {
+    return (
+      <div className="popup">
+        <div className="popup__panel">
+          <SettingsApp compact onBack={() => setView('dashboard')} />
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -44,7 +59,7 @@ export default function App() {
         <button
           type="button"
           className="popup__settings"
-          onClick={() => chrome.runtime.openOptionsPage()}
+          onClick={() => setView('settings')}
         >
           Настройки
         </button>

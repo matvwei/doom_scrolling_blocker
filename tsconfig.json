@@ -11,6 +11,7 @@
     "core/**/*.ts",
     "adapters/**/*.ts",
     "hooks/**/*.ts",
+    "components/**/*.tsx",
     "entrypoints/**/*.ts",
     "entrypoints/**/*.tsx",
     "tests/**/*.ts",

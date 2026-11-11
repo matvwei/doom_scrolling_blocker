@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import OptionsApp from '../entrypoints/options/App';
-import { CONFIG_KEY } from '../adapters/storage';
+import { CONFIG_KEY, PENDING_CONFIG_KEY } from '../adapters/storage';
 import { getDefaultConfig } from '../core/config';
 import { installFakeChrome } from './fakeChrome';
 
@@ -231,6 +231,8 @@ describe('Options page: пользовательские сайты', () => {
     expect(fake.permissions.request).toHaveBeenCalledWith({ origins: ['https://*.deny.example.com/*'] });
     expect(await screen.findByText(/Доступ к добавленным сайтам не подтверждён/)).toBeInTheDocument();
     expect(fake.data.has(CONFIG_KEY)).toBe(false); // сайт не добавлен
+    // Черновик сохранён: при повторном открытии настройки его восстановят.
+    expect(fake.data.has(PENDING_CONFIG_KEY)).toBe(true);
   });
 
   it('при принятом запросе сохраняет сайт', async () => {
@@ -408,5 +410,97 @@ describe('Options page: пользовательские сайты', () => {
       'https://example.com/news',
       'https://example.com/sport',
     ]);
+  });
+});
+
+describe('Options page: прерванное сохранение (черновик)', () => {
+  function draftWithSite() {
+    const draft = getDefaultConfig();
+    draft.services.youtube.sessionLimitMinutes = 33;
+    draft.customSites.push({
+      id: 'site-draft',
+      name: 'Черновой сайт',
+      url: 'https://draft.example.com/',
+      enabled: true,
+      sessionLimitMinutes: 15,
+      dailyLimitMinutes: 45,
+      action: 'warning',
+      redirectUrl: '',
+      message: 'm',
+    });
+    return draft;
+  }
+
+  it('черновик с уже выданными разрешениями автоматически сохраняется при открытии', async () => {
+    const fake = installFakeChrome({ [PENDING_CONFIG_KEY]: draftWithSite() });
+
+    render(<OptionsApp />);
+    await screen.findByRole('heading', { name: 'Настройки Doomscroll Blocker' });
+
+    // Доступ к домену уже выдан — сохранение достроилось само.
+    expect(await screen.findByText('Сохранено')).toBeInTheDocument();
+    expect(fake.data.get(CONFIG_KEY)).toEqual(draftWithSite());
+    expect(fake.data.has(PENDING_CONFIG_KEY)).toBe(false);
+    // Восстановленная форма отражает черновик.
+    const youtube = within(serviceCard('YouTube Shorts'));
+    expect(youtube.getByLabelText(/Лимит сессии, минут/)).toHaveValue(33);
+  });
+
+  it('черновик без подтверждённого доступа восстанавливает форму с пояснением', async () => {
+    const fake = installFakeChrome({ [PENDING_CONFIG_KEY]: draftWithSite() });
+    fake.permissions.contains.mockResolvedValue(false);
+
+    render(<OptionsApp />);
+    await screen.findByRole('heading', { name: 'Настройки Doomscroll Blocker' });
+
+    // Конфиг не сохранён, но введённые данные не потеряны: форма из черновика.
+    expect(await screen.findByText(/Сохранение было прервано запросом доступа/)).toBeInTheDocument();
+    expect(fake.data.has(CONFIG_KEY)).toBe(false);
+    expect(fake.data.has(PENDING_CONFIG_KEY)).toBe(true);
+    expect(within(serviceCard('YouTube Shorts')).getByLabelText(/Лимит сессии, минут/)).toHaveValue(33);
+  });
+});
+
+describe('Options page: повреждённый черновик (DEFECT-6)', () => {
+  it('черновик с services:{} не падает, очищается и не применяется', async () => {
+    const fake = installFakeChrome({
+      [PENDING_CONFIG_KEY]: { version: 2, youtubeScope: 'shorts', services: {}, customSites: [] },
+    });
+
+    render(<OptionsApp />);
+    await screen.findByRole('heading', { name: 'Настройки Doomscroll Blocker' });
+    await screen.findByLabelText('Название нового сайта');
+
+    // Без crash: форма открылась от обычного config (дефолт), не от черновика.
+    expect(within(serviceCard('YouTube Shorts')).getByLabelText(/Лимит сессии, минут/)).toHaveValue(15);
+    // Повреждённый черновик гарантированно очищен и не применён.
+    expect(fake.data.has(PENDING_CONFIG_KEY)).toBe(false);
+    expect(fake.data.has(CONFIG_KEY)).toBe(false);
+  });
+
+  it('мусорный черновик (невалидные значения) очищается без crash', async () => {
+    const fake = installFakeChrome({
+      [PENDING_CONFIG_KEY]: {
+        version: 2,
+        youtubeScope: 'shorts',
+        services: {
+          youtube: {
+            enabled: true,
+            sessionLimitMinutes: 15,
+            dailyLimitMinutes: 45,
+            action: 'redirect',
+            redirectUrl: 5, // не строка — validateConfig упал бы с TypeError
+            message: 'm',
+          },
+        },
+        customSites: [{ junk: true }],
+      },
+    });
+
+    render(<OptionsApp />);
+    await screen.findByRole('heading', { name: 'Настройки Doomscroll Blocker' });
+
+    expect(fake.data.has(PENDING_CONFIG_KEY)).toBe(false); // очищен
+    expect(fake.data.has(CONFIG_KEY)).toBe(false); // и не применён
   });
 });

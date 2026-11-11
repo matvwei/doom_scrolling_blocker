@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CONFIG_KEY, STATE_KEY, loadConfig, loadState, saveConfig, saveState } from '../adapters/storage';
+import {
+  CONFIG_KEY,
+  PENDING_CONFIG_KEY,
+  STATE_KEY,
+  loadConfig,
+  loadState,
+  saveConfig,
+  saveState,
+} from '../adapters/storage';
+import { isResumablePendingConfig, tryResumePendingConfig } from '../adapters/pendingResume';
 import { getDefaultConfig } from '../core/config';
 import { localDayKey } from '../core/time';
 import { installFakeChrome } from './fakeChrome';
@@ -145,5 +154,128 @@ describe('adapters/storage', () => {
     const state = await loadState(now);
     expect(state['site-x']!.sessionSeconds).toBe(7);
     expect(state.youtube!.sessionSeconds).toBe(0);
+  });
+});
+
+describe('adapters/storage: семантика свежести черновика (DEFECT-5)', () => {
+  function draftWithSite() {
+    const draft = getDefaultConfig();
+    draft.services.youtube.sessionLimitMinutes = 33;
+    draft.customSites.push({
+      id: 'site-draft',
+      name: 'Черновой сайт',
+      url: 'https://draft.example.com/',
+      enabled: true,
+      sessionLimitMinutes: 15,
+      dailyLimitMinutes: 45,
+      action: 'warning',
+      redirectUrl: '',
+      message: 'm',
+    });
+    return draft;
+  }
+
+  it('saveConfig инвалидирует черновик: свежий config не перезапишется stale-резюме', async () => {
+    const fake = installFakeChrome({ [PENDING_CONFIG_KEY]: draftWithSite() });
+    const config = getDefaultConfig();
+    config.services.youtube.enabled = false; // «toggle с dashboard»
+
+    expect(await saveConfig(config)).toBe(true);
+
+    expect(fake.data.get(CONFIG_KEY)).toEqual(config);
+    expect(fake.data.has(PENDING_CONFIG_KEY)).toBe(false);
+  });
+
+  it('неуспешный saveConfig черновик не трогает', async () => {
+    const fake = installFakeChrome({ [PENDING_CONFIG_KEY]: draftWithSite() });
+    const brokenStorage = (
+      globalThis as unknown as {
+        chrome: { storage: { local: { set: (items: Record<string, unknown>) => Promise<void> } } };
+      }
+    ).chrome.storage.local;
+    brokenStorage.set = () => Promise.reject(new Error('quota'));
+
+    expect(await saveConfig(getDefaultConfig())).toBe(false);
+    expect(fake.data.has(PENDING_CONFIG_KEY)).toBe(true);
+  });
+});
+
+describe('adapters/pendingResume', () => {
+  function draftWithSite() {
+    const draft = getDefaultConfig();
+    draft.services.youtube.sessionLimitMinutes = 33;
+    draft.customSites.push({
+      id: 'site-draft',
+      name: 'Черновой сайт',
+      url: 'https://draft.example.com/',
+      enabled: true,
+      sessionLimitMinutes: 15,
+      dailyLimitMinutes: 45,
+      action: 'warning',
+      redirectUrl: '',
+      message: 'm',
+    });
+    return draft;
+  }
+
+  it('isResumablePendingConfig принимает well-formed черновик и отбрасывает повреждённые без исключений', () => {
+    expect(isResumablePendingConfig(draftWithSite())).toBe(true);
+    expect(isResumablePendingConfig(null)).toBe(false);
+    expect(isResumablePendingConfig('junk')).toBe(false);
+    // DEFECT-6: services без обязательных сервисов — не падает, отбраковывается.
+    expect(
+      isResumablePendingConfig({ version: 2, youtubeScope: 'shorts', services: {}, customSites: [] }),
+    ).toBe(false);
+    // Внутренности сервисов не по форме (redirectUrl не строка при redirect).
+    const broken = draftWithSite();
+    (broken.services.youtube as { redirectUrl: unknown }).redirectUrl = 5;
+    broken.services.youtube.action = 'redirect';
+    expect(isResumablePendingConfig(broken)).toBe(false);
+    // customSites не массив.
+    const brokenSites = draftWithSite() as unknown as { customSites: unknown };
+    brokenSites.customSites = { junk: 1 };
+    expect(isResumablePendingConfig(brokenSites)).toBe(false);
+  });
+
+  it('tryResumePendingConfig сохраняет черновик при выданных разрешениях (путь permissions.onAdded)', async () => {
+    const fake = installFakeChrome({ [PENDING_CONFIG_KEY]: draftWithSite() });
+
+    expect(await tryResumePendingConfig()).toBe(true);
+    // saveConfig сам инвалидирует черновик.
+    expect(fake.data.get(CONFIG_KEY)).toEqual(draftWithSite());
+    expect(fake.data.has(PENDING_CONFIG_KEY)).toBe(false);
+  });
+
+  it('tryResumePendingConfig оставляет черновик, пока доступ не подтверждён', async () => {
+    const fake = installFakeChrome({ [PENDING_CONFIG_KEY]: draftWithSite() });
+    fake.permissions.contains.mockResolvedValue(false);
+
+    expect(await tryResumePendingConfig()).toBe(false);
+    expect(fake.data.has(CONFIG_KEY)).toBe(false);
+    expect(fake.data.has(PENDING_CONFIG_KEY)).toBe(true); // ждёт подтверждения
+  });
+
+  it('tryResumePendingConfig очищает повреждённый черновик и не падает (DEFECT-6)', async () => {
+    const fake = installFakeChrome({
+      [PENDING_CONFIG_KEY]: { version: 2, youtubeScope: 'shorts', services: {}, customSites: [] },
+    });
+
+    expect(await tryResumePendingConfig()).toBe(false);
+    expect(fake.data.has(PENDING_CONFIG_KEY)).toBe(false); // гарантированно очищен
+    expect(fake.data.has(CONFIG_KEY)).toBe(false); // и не применён
+  });
+
+  it('tryResumePendingConfig не перезаписывает config, сохранённый между чтением и записью', async () => {
+    const fake = installFakeChrome({ [PENDING_CONFIG_KEY]: draftWithSite() });
+    // Имитация гонки: пока идут contains-проверки, стороннее сохранение
+    // config инвалидирует черновик.
+    fake.permissions.contains.mockImplementation(async () => {
+      await saveConfig(getDefaultConfig());
+      return true;
+    });
+
+    expect(await tryResumePendingConfig()).toBe(false);
+    expect(fake.data.get(CONFIG_KEY)).toEqual(getDefaultConfig()); // свежий config цел
+    expect(fake.data.has(PENDING_CONFIG_KEY)).toBe(false);
   });
 });

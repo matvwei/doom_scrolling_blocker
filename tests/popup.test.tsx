@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import PopupApp from '../entrypoints/popup/App';
-import { CONFIG_KEY, STATE_KEY } from '../adapters/storage';
+import { CONFIG_KEY, PENDING_CONFIG_KEY, STATE_KEY } from '../adapters/storage';
 import { getDefaultConfig } from '../core/config';
 import type { ServiceState } from '../core/limits';
 import { localDayKey } from '../core/time';
@@ -173,7 +173,7 @@ describe('Popup', () => {
     expect(siteCard.getByText('05:00')).toBeInTheDocument();
   });
 
-  it('кнопка настроек открывает страницу настроек', async () => {
+  it('кнопка «Настройки» открывает настройки внутри popup, не открывая страницу', async () => {
     const fake = installFakeChrome();
     const user = userEvent.setup();
 
@@ -182,6 +182,121 @@ describe('Popup', () => {
     const settingsButton = await screen.findByRole('button', { name: 'Настройки' });
     await user.click(settingsButton);
 
-    expect(fake.openOptionsPage).toHaveBeenCalled();
+    // Настройки открылись внутри popup: есть заголовок и кнопка «Назад».
+    expect(await screen.findByRole('heading', { name: 'Настройки' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Назад/ })).toBeInTheDocument();
+    // Отдельная страница/вкладка options не открывается.
+    expect(fake.openOptionsPage).not.toHaveBeenCalled();
+    // Dashboard временно скрыт (футер dashboard-экрана неактивен).
+    expect(screen.queryByText(/Лимиты сессии сбрасываются/)).not.toBeInTheDocument();
+  });
+
+  it('кнопка «Назад» возвращает на dashboard popup', async () => {
+    installFakeChrome();
+    const user = userEvent.setup();
+
+    render(<PopupApp />);
+
+    await user.click(await screen.findByRole('button', { name: 'Настройки' }));
+    await screen.findByRole('heading', { name: 'Настройки' });
+
+    await user.click(screen.getByRole('button', { name: /Назад/ }));
+
+    expect(await screen.findByText('Instagram Reels')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Настройки' })).not.toBeInTheDocument();
+  });
+
+  it('добавление и сохранение custom-сайта работает из popup', async () => {
+    const fake = installFakeChrome();
+    const user = userEvent.setup();
+
+    render(<PopupApp />);
+
+    await user.click(await screen.findByRole('button', { name: 'Настройки' }));
+    await screen.findByRole('heading', { name: 'Настройки' });
+
+    await user.type(screen.getByLabelText('Название нового сайта'), 'Popup Site');
+    await user.type(screen.getByLabelText('Адрес нового сайта (URL)'), 'https://popup.example.com/');
+    await user.click(screen.getByRole('button', { name: 'Добавить сайт' }));
+
+    // Карточка сайта появилась в настройках popup.
+    expect(await screen.findByRole('heading', { name: 'Popup Site' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+    expect(await screen.findByText('Сохранено')).toBeInTheDocument();
+    const saved = fake.data.get(CONFIG_KEY) as ReturnType<typeof getDefaultConfig>;
+    expect(saved.customSites).toHaveLength(1);
+    expect(saved.customSites[0]!.name).toBe('Popup Site');
+    expect(saved.customSites[0]!.url).toBe('https://popup.example.com/');
+  });
+
+  it('отказ в разрешении в popup: ошибка, конфиг не сохранён, черновик остаётся', async () => {
+    const fake = installFakeChrome();
+    fake.permissions.contains.mockResolvedValue(false);
+    fake.permissions.request.mockResolvedValue(false);
+    const user = userEvent.setup();
+
+    render(<PopupApp />);
+
+    await user.click(await screen.findByRole('button', { name: 'Настройки' }));
+    await screen.findByRole('heading', { name: 'Настройки' });
+
+    await user.type(screen.getByLabelText('Название нового сайта'), 'Отклонённый');
+    await user.type(screen.getByLabelText('Адрес нового сайта (URL)'), 'https://deny.example.com/');
+    await user.click(screen.getByRole('button', { name: 'Добавить сайт' }));
+    await user.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+    expect(fake.permissions.request).toHaveBeenCalledWith({ origins: ['https://*.deny.example.com/*'] });
+    expect(await screen.findByText(/Доступ к добавленным сайтам не подтверждён/)).toBeInTheDocument();
+    expect(fake.data.has(CONFIG_KEY)).toBe(false);
+    // Черновик не потерян: настройки восстановят его при повторном открытии.
+    expect(fake.data.has(PENDING_CONFIG_KEY)).toBe(true);
+  });
+
+  it('DEFECT-5: toggle на dashboard инвалидирует черновик — auto-resume не затирает свежий config', async () => {
+    // Прерванное permission-сохранение оставило черновик (лимит 33 + сайт).
+    const draft = getDefaultConfig();
+    draft.services.youtube.sessionLimitMinutes = 33;
+    draft.customSites.push({
+      id: 'site-draft',
+      name: 'Черновой сайт',
+      url: 'https://draft.example.com/',
+      enabled: true,
+      sessionLimitMinutes: 15,
+      dailyLimitMinutes: 45,
+      action: 'warning',
+      redirectUrl: '',
+      message: 'm',
+    });
+    const fake = installFakeChrome({ [PENDING_CONFIG_KEY]: draft });
+    const user = userEvent.setup();
+
+    render(<PopupApp />);
+
+    // Пользователь на dashboard переключает сервис — прямой saveConfig.
+    const toggle = await screen.findByRole('checkbox', { name: 'Включить YouTube Shorts' });
+    await user.click(toggle);
+    await waitFor(() => {
+      expect((fake.data.get(CONFIG_KEY) as ReturnType<typeof getDefaultConfig>).services.youtube.enabled).toBe(false);
+    });
+    // Свежий config инвалидировал устаревший черновик.
+    expect(fake.data.has(PENDING_CONFIG_KEY)).toBe(false);
+
+    // Повторное открытие настроек НЕ применяет черновик.
+    await user.click(screen.getByRole('button', { name: 'Настройки' }));
+    await screen.findByRole('heading', { name: 'Настройки' });
+    await screen.findByLabelText('Название нового сайта'); // форма полностью отрисована
+    const youtubeCard = within(
+      screen.getByRole('heading', { name: 'YouTube Shorts' }).closest('section') as HTMLElement,
+    );
+    expect(youtubeCard.getByLabelText(/Лимит сессии, минут/)).toHaveValue(15);
+    expect(screen.queryByRole('heading', { name: 'Черновой сайт' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Сохранено')).not.toBeInTheDocument();
+    // Stored config не перезаписан резюме: toggle сохранился, черновик не появился.
+    const stored = fake.data.get(CONFIG_KEY) as ReturnType<typeof getDefaultConfig>;
+    expect(stored.services.youtube.enabled).toBe(false);
+    expect(stored.services.youtube.sessionLimitMinutes).toBe(15);
+    expect(stored.customSites).toHaveLength(0);
   });
 });

@@ -12,6 +12,12 @@ import { SERVICE_IDS } from '../core/services';
 
 export const CONFIG_KEY = 'dsb:config';
 export const STATE_KEY = 'dsb:state';
+/**
+ * Черновик конфигурации, сохраненный ДО нативного prompt разрешений:
+ * popup может закрыться на запросе доступа, и тогда введённые данные
+ * восстанавливаются из этого ключа при повторном открытии настроек.
+ */
+export const PENDING_CONFIG_KEY = 'dsb:pendingConfig';
 
 /** Состояние трекинга по целям: встроенные сервисы и custom-сайты (ключ — id сайта). */
 export type StoredState = Record<string, ServiceState>;
@@ -19,6 +25,7 @@ export type StoredState = Record<string, ServiceState>;
 interface StorageArea {
   get(keys: string | string[]): Promise<Record<string, unknown>>;
   set(items: Record<string, unknown>): Promise<void>;
+  remove(keys: string | string[]): Promise<void>;
 }
 
 /**
@@ -36,6 +43,19 @@ function enqueueSet(items: Record<string, unknown>): Promise<boolean> {
   const result = writeQueue
     .catch(() => false)
     .then(() => storage.set(snapshot))
+    .then(() => true)
+    .catch(() => false);
+  writeQueue = result;
+  return result;
+}
+
+/** Удаление тоже проходит через общую очередь: порядок set/remove сохраняется. */
+function enqueueRemove(key: string): Promise<boolean> {
+  const storage = getStorageArea();
+  if (!storage) return Promise.resolve(false);
+  const result = writeQueue
+    .catch(() => false)
+    .then(() => storage.remove(key))
     .then(() => true)
     .catch(() => false);
   writeQueue = result;
@@ -63,7 +83,34 @@ export async function loadConfig(): Promise<ExtensionConfig> {
 }
 
 export async function saveConfig(config: ExtensionConfig): Promise<boolean> {
-  return enqueueSet({ [CONFIG_KEY]: config });
+  const ok = await enqueueSet({ [CONFIG_KEY]: config });
+  // Свежесть: любое сохранение конфигурации инвалидирует черновик прерванного
+  // сохранения — он построен от более старого состояния и не должен перезаписывать
+  // config, изменённый вне цикла resume (например, toggle с dashboard popup).
+  if (ok) await enqueueRemove(PENDING_CONFIG_KEY);
+  return ok;
+}
+
+export async function savePendingConfig(config: ExtensionConfig): Promise<boolean> {
+  return enqueueSet({ [PENDING_CONFIG_KEY]: config });
+}
+
+export async function loadPendingConfig(): Promise<ExtensionConfig | null> {
+  const storage = getStorageArea();
+  if (!storage) return null;
+  try {
+    const raw = await storage.get(PENDING_CONFIG_KEY);
+    const pending = raw[PENDING_CONFIG_KEY];
+    return typeof pending === 'object' && pending !== null
+      ? (pending as ExtensionConfig)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function clearPendingConfig(): Promise<boolean> {
+  return enqueueRemove(PENDING_CONFIG_KEY);
 }
 
 /** Сырые состояния из хранилища (без пересчёта). */

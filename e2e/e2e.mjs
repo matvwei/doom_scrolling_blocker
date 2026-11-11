@@ -10,6 +10,15 @@
  * юнит-тестами адаптеров и компонентными тестами options.
  *
  * Запуск: npm run test:e2e (сборка e2e-варианта выполняется автоматически).
+ *
+ * Проверка UI popup (сценарий 5): открывается реальный popup.html в контексте
+ * расширения с вьюпортом action-popup; «Настройки» переключают view внутри
+ * popup (без новой вкладки/страницы options), форма добавления сайта —
+ * одна колонка без горизонтального overflow, add/save custom-сайта работает.
+ * Полная страница options дополнительно проверяется в сценариях 4 и 18–19
+ * как fallback через chrome://extensions. Сценарии 21–22 — семантика
+ * dsb:pendingConfig: свежий config инвалидирует прерванный черновик
+ * (DEFECT-5) и нормальный auto-resume после native prompt.
  */
 import { execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -23,6 +32,7 @@ const E2E_ORIGIN = 'https://*.doomscroll-e2e.test/*';
 const CUSTOM_HOST = 'https://doomscroll-e2e.test';
 const STATE_KEY = 'dsb:state';
 const CONFIG_KEY = 'dsb:config';
+const PENDING_CONFIG_KEY = 'dsb:pendingConfig';
 const MESSAGE = 'Хватит doomscrollить. Пора вернуться к делам';
 
 let passed = 0;
@@ -354,14 +364,116 @@ async function main() {
     check('лимит TikTok (9 минут) виден в background сразу после сохранения', persisted === 9);
     await optionsPage.close();
 
-    console.log('\nСценарий 5: popup отображает сервисы и остаток времени');
+    console.log('\nСценарий 5: popup — dashboard, настройки внутри popup, custom add/save, layout');
     const popupPage = await context.newPage();
+    // Вьюпорт как у реального action-popup (конент 360px): проверяем,
+    // что вёрстка держит узкое окно без горизонтального переполнения.
+    await popupPage.setViewportSize({ width: 400, height: 600 });
     await popupPage.goto(`chrome-extension://${extensionId}/popup.html`);
     check('popup показывает TikTok', await popupPage.getByText('TikTok').isVisible());
     check('popup показывает Instagram Reels', await popupPage.getByText('Instagram Reels').isVisible());
     check(
       'popup показывает остаток по лимиту сессии (9 минут)',
       await popupPage.getByText('09:00').isVisible(),
+    );
+
+    // «Настройки» открывают настройки ВНУТРИ popup — без новой вкладки/страницы.
+    const pagesBeforeSettings = context.pages().length;
+    await popupPage.getByRole('button', { name: 'Настройки' }).click();
+    await popupPage
+      .getByRole('button', { name: 'Назад' })
+      .waitFor({ state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    check(
+      'настройки открылись внутри popup (заголовок и кнопка «Назад»)',
+      (await popupPage.getByRole('heading', { name: 'Настройки' }).count()) === 1 &&
+        (await popupPage.getByRole('button', { name: 'Назад' }).count()) === 1,
+    );
+    check(
+      'новая вкладка/страница не открыта',
+      context.pages().length === pagesBeforeSettings &&
+        !context.pages().some((p) => p.url().includes('options.html')),
+    );
+
+    // Layout формы добавления сайта: одна колонка с общими границами,
+    // нет горизонтального overflow, длинные значения не ломают вёрстку.
+    const longName = `Очень длинное название новостного сайта ${'для проверки переноса '.repeat(6)}`.trim();
+    const longUrl = `https://doomscroll-e2e.test/${'a'.repeat(200)}`;
+    await popupPage.getByLabel('Название нового сайта').fill(longName);
+    await popupPage.getByLabel('Адрес нового сайта (URL)').fill(longUrl);
+    const layout = await popupPage.evaluate(() => {
+      const doc = document.documentElement;
+      const form = document.querySelector('.add-site');
+      if (!form) return null;
+      const rect = (el) => {
+        const r = el.getBoundingClientRect();
+        return { left: r.left, right: r.right, top: r.top };
+      };
+      return {
+        docScrollWidth: doc.scrollWidth,
+        docClientWidth: doc.clientWidth,
+        bodyScrollWidth: document.body.scrollWidth,
+        children: [...form.children].map(rect),
+        fieldBlocks: [...form.querySelectorAll(':scope > .field')].map(rect),
+      };
+    });
+    check('форма добавления сайта присутствует в popup-настройках', layout !== null);
+    if (layout) {
+      const EPS = 1;
+      const sameLeft = layout.children.every(
+        (r) => Math.abs(r.left - layout.children[0].left) <= EPS,
+      );
+      const sequentialY = layout.children.every(
+        (r, i) => i === 0 || r.top > layout.children[i - 1].top - EPS,
+      );
+      const sameColumn =
+        layout.fieldBlocks.length > 0 &&
+        layout.fieldBlocks.every(
+          (r) =>
+            Math.abs(r.left - layout.fieldBlocks[0].left) <= EPS &&
+            Math.abs(r.right - layout.fieldBlocks[0].right) <= EPS,
+        );
+      const noHOverflow =
+        layout.docScrollWidth <= layout.docClientWidth &&
+        layout.bodyScrollWidth <= layout.docClientWidth;
+      check('все контролы формы выровнены по левому краю одной колонки', sameLeft);
+      check('контролы формы идут строго друг под другом (последовательные Y)', sequentialY);
+      check('поля формы имеют общие левую и правую границы колонки', sameColumn);
+      check('нет горизонтального overflow (scrollWidth <= clientWidth)', noHOverflow);
+    }
+
+    // Custom-сайт через UI popup: добавление и сохранение (доступ к тестовому
+    // origin предвыдан в e2e-сборке, prompt не появляется).
+    await popupPage.getByLabel('Название нового сайта').fill('Popup Site');
+    await popupPage.getByLabel('Адрес нового сайта (URL)').fill(CUSTOM_HOST);
+    await popupPage.getByRole('button', { name: 'Добавить сайт' }).click();
+    await popupPage
+      .getByRole('heading', { name: 'Popup Site' })
+      .waitFor({ state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    check(
+      'карточка сайта появилась в настройках popup',
+      (await popupPage.getByRole('heading', { name: 'Popup Site' }).count()) === 1,
+    );
+    await popupPage.getByRole('button', { name: 'Сохранить' }).click();
+    await popupPage
+      .getByText('Сохранено')
+      .waitFor({ state: 'visible', timeout: 5000 })
+      .then(() => check('сохранение custom-сайта из popup прошло', true))
+      .catch(() => check('сохранение custom-сайта из popup прошло', false));
+    const popupSaved = await readStoredConfig();
+    check(
+      'custom-сайт из popup сохранён в конфигурации',
+      (popupSaved?.customSites ?? []).some(
+        (s) => s.name === 'Popup Site' && s.url === `${CUSTOM_HOST}/`,
+      ),
+    );
+
+    // «Назад» возвращает на dashboard popup.
+    await popupPage.getByRole('button', { name: 'Назад' }).click();
+    check(
+      'возврат «Назад» показывает dashboard снова',
+      await popupPage.getByText('Instagram Reels').first().isVisible(),
     );
     await popupPage.close();
 
@@ -707,6 +819,120 @@ async function main() {
     const closeSitePage = await openFakePage(`${CUSTOM_HOST}/close-me`);
     await closeSitePage.waitForEvent('close', { timeout: 15000 }).catch(() => {});
     check('вкладка custom-сайта закрыта автоматически (close, лимит 0)', closeSitePage.isClosed());
+
+    console.log('\nСценарий 21: DEFECT-5 — свежий config инвалидирует прерванный черновик');
+    // Последовательность из дефекта: прерванный permission-save оставляет
+    // pending → toggle на dashboard (прямой saveConfig) → повторное открытие
+    // настроек не должно применить устаревший черновик.
+    await primeAndReload(baseConfig(), {
+      youtube: emptyService(),
+      instagram: emptyService(),
+      tiktok: emptyService(),
+    });
+    const staleDraft = baseConfig();
+    staleDraft.services.youtube.sessionLimitMinutes = 33;
+    staleDraft.customSites.push(customSite('site-stale', 'Stale Draft', CUSTOM_HOST));
+    await worker.evaluate(
+      ([key, value]) => chrome.storage.local.set({ [key]: value }).then(() => true),
+      [PENDING_CONFIG_KEY, staleDraft],
+    );
+    const readPending = () =>
+      worker
+        .evaluate(([key]) => chrome.storage.local.get(key).then((d) => d[key] ?? null), [
+          PENDING_CONFIG_KEY,
+        ])
+        .catch(() => null);
+
+    const popup21 = await context.newPage();
+    await popup21.setViewportSize({ width: 400, height: 600 });
+    await popup21.goto(`chrome-extension://${extensionId}/popup.html`);
+    check('черновик лежит в хранилище до toggle', (await readPending()) !== null);
+
+    // Toggle на dashboard — прямой saveConfig через UI popup.
+    // (input переключателя визуально скрыт — кликаем по label.switch.)
+    await popup21
+      .locator('.service', { hasText: 'YouTube Shorts' })
+      .locator('label.switch')
+      .click();
+    await worker
+      .evaluate(() =>
+        chrome.storage.local.get('dsb:config').then((d) => d['dsb:config']?.services?.youtube?.enabled),
+      )
+      .then((enabled) => check('toggle сохранил youtube.enabled=false', enabled === false));
+    let pendingAfterToggle = await readPending();
+    const deadline21 = Date.now() + 5000;
+    while (pendingAfterToggle !== null && Date.now() < deadline21) {
+      await new Promise((r) => setTimeout(r, 300));
+      pendingAfterToggle = await readPending();
+    }
+    check('свежий config инвалидировал черновик', pendingAfterToggle === null);
+
+    // Повторное открытие настроек: auto-resume НЕ применяет черновик.
+    await popup21.getByRole('button', { name: 'Настройки' }).click();
+    await popup21.getByRole('heading', { name: 'Настройки' }).waitFor({ state: 'visible', timeout: 5000 });
+    await popup21.getByLabel('Название нового сайта').waitFor({ state: 'visible', timeout: 5000 });
+    check(
+      'auto-resume не сработал (нет автосохранения черновика)',
+      (await popup21.getByText('Сохранено').count()) === 0,
+    );
+    check(
+      'лимит сессии YouTube = 15 (не 33 из черновика)',
+      (await popup21.getByLabel(/Лимит сессии, минут/).first().inputValue()) === '15',
+    );
+    check(
+      'сайт из черновика не появился',
+      (await popup21.getByRole('heading', { name: 'Stale Draft' }).count()) === 0,
+    );
+    const configAfter21 = await readStoredConfig();
+    check(
+      'stored config цел: toggle сохранён, черновик не применён',
+      configAfter21?.services?.youtube?.enabled === false &&
+        configAfter21?.services?.youtube?.sessionLimitMinutes === 15 &&
+        (configAfter21?.customSites ?? []).length === 0,
+    );
+    await popup21.close();
+
+    console.log('\nСценарий 22: нормальный resume после native prompt (доступ предвыдан)');
+    // Тот же pending, но config между записью черновика и открытием настроек
+    // НЕ менялся — auto-resume обязан достроить сохранение.
+    await primeAndReload(baseConfig(), {
+      youtube: emptyService(),
+      instagram: emptyService(),
+      tiktok: emptyService(),
+    });
+    const resumableDraft = baseConfig();
+    resumableDraft.services.youtube.sessionLimitMinutes = 33;
+    resumableDraft.customSites.push(customSite('site-resume', 'Resumed Site', CUSTOM_HOST));
+    await worker.evaluate(
+      ([key, value]) => chrome.storage.local.set({ [key]: value }).then(() => true),
+      [PENDING_CONFIG_KEY, resumableDraft],
+    );
+
+    const popup22 = await context.newPage();
+    await popup22.setViewportSize({ width: 400, height: 600 });
+    await popup22.goto(`chrome-extension://${extensionId}/popup.html`);
+    await popup22.getByRole('button', { name: 'Настройки' }).click();
+    await popup22
+      .getByText('Сохранено')
+      .waitFor({ state: 'visible', timeout: 5000 })
+      .then(() => check('auto-resume достроил сохранение (Сохранено)', true))
+      .catch(() => check('auto-resume достроил сохранение (Сохранено)', false));
+    check(
+      'лимит сессии YouTube = 33 из черновика',
+      (await popup22.getByLabel(/Лимит сессии, минут/).first().inputValue()) === '33',
+    );
+    check(
+      'сайт из черновика в форме',
+      (await popup22.getByRole('heading', { name: 'Resumed Site' }).count()) === 1,
+    );
+    const configAfter22 = await readStoredConfig();
+    check(
+      'черновик сохранён в config, pending очищен',
+      configAfter22?.services?.youtube?.sessionLimitMinutes === 33 &&
+        (configAfter22?.customSites ?? []).some((s) => s.name === 'Resumed Site') &&
+        (await readPending()) === null,
+    );
+    await popup22.close();
   } finally {
     await context.close().catch(() => {});
   }
