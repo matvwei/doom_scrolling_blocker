@@ -19,6 +19,12 @@
  * как fallback через chrome://extensions. Сценарии 21–22 — семантика
  * dsb:pendingConfig: свежий config инвалидирует прерванный черновик
  * (DEFECT-5) и нормальный auto-resume после native prompt.
+ *
+ * Геометрические инварианты UI (все видимые элементы и тексты внутри своих
+ * контейнеров, без горизонтального overflow) проверяются в реальном браузере
+ * переиспользуемым помощником e2e/geometry.mjs: popup dashboard и настройки
+ * (сценарий 5) и страница options fallback (сценарий 23) — включая radio
+ * scope YouTube, длинные названия/URL/сообщения и состояния ошибок.
  */
 import { execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -26,6 +32,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { chromium } from 'playwright';
+import { checkGeometry } from './geometry.mjs';
 
 const EXTENSION_PATH = path.resolve(process.cwd(), '.e2e-output/chrome-mv3');
 const E2E_ORIGIN = 'https://*.doomscroll-e2e.test/*';
@@ -376,6 +383,11 @@ async function main() {
       'popup показывает остаток по лимиту сессии (9 минут)',
       await popupPage.getByText('09:00').isVisible(),
     );
+    await checkGeometry(
+      check,
+      'popup dashboard: элементы и тексты внутри контейнеров, без overflow',
+      popupPage,
+    );
 
     // «Настройки» открывают настройки ВНУТРИ popup — без новой вкладки/страницы.
     const pagesBeforeSettings = context.pages().length;
@@ -393,6 +405,11 @@ async function main() {
       'новая вкладка/страница не открыта',
       context.pages().length === pagesBeforeSettings &&
         !context.pages().some((p) => p.url().includes('options.html')),
+    );
+    await checkGeometry(
+      check,
+      'popup-настройки: геометрия по умолчанию (карточки, radio scope YouTube, add-form)',
+      popupPage,
     );
 
     // Layout формы добавления сайта: одна колонка с общими границами,
@@ -441,6 +458,25 @@ async function main() {
       check('поля формы имеют общие левую и правую границы колонки', sameColumn);
       check('нет горизонтального overflow (scrollWidth <= clientWidth)', noHOverflow);
     }
+    await checkGeometry(
+      check,
+      'popup-настройки: геометрия с длинными названием/URL в add-form',
+      popupPage,
+    );
+
+    // Состояние ошибки добавления: текст ошибки тоже остаётся внутри контейнеров.
+    await popupPage.getByLabel('Название нового сайта').fill('');
+    await popupPage.getByLabel('Адрес нового сайта (URL)').fill('не-url');
+    await popupPage.getByRole('button', { name: 'Добавить сайт' }).click();
+    await popupPage
+      .getByText('Укажите название сайта')
+      .waitFor({ state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await checkGeometry(
+      check,
+      'popup-настройки: геометрия с ошибкой добавления сайта',
+      popupPage,
+    );
 
     // Custom-сайт через UI popup: добавление и сохранение (доступ к тестовому
     // origin предвыдан в e2e-сборке, prompt не появляется).
@@ -455,6 +491,28 @@ async function main() {
       'карточка сайта появилась в настройках popup',
       (await popupPage.getByRole('heading', { name: 'Popup Site' }).count()) === 1,
     );
+    await checkGeometry(
+      check,
+      'popup-настройки: геометрия с карточкой custom-сайта',
+      popupPage,
+    );
+
+    // Ошибка валидации лимита: тексты ошибок остаются внутри карточки.
+    const popupSiteCard = popupPage.locator('section.card', {
+      has: popupPage.getByRole('heading', { name: 'Popup Site' }),
+    });
+    await popupSiteCard.getByLabel(/Лимит сессии, минут/).fill('-1');
+    await popupPage.getByRole('button', { name: 'Сохранить' }).click();
+    await popupSiteCard
+      .getByText(/Лимит сессии: целое число/)
+      .waitFor({ state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await checkGeometry(
+      check,
+      'popup-настройки: геометрия с ошибкой валидации лимита',
+      popupPage,
+    );
+    await popupSiteCard.getByLabel(/Лимит сессии, минут/).fill('15');
     await popupPage.getByRole('button', { name: 'Сохранить' }).click();
     await popupPage
       .getByText('Сохранено')
@@ -467,6 +525,11 @@ async function main() {
       (popupSaved?.customSites ?? []).some(
         (s) => s.name === 'Popup Site' && s.url === `${CUSTOM_HOST}/`,
       ),
+    );
+    await checkGeometry(
+      check,
+      'popup-настройки: геометрия после сохранения (status «Сохранено»)',
+      popupPage,
     );
 
     // «Назад» возвращает на dashboard popup.
@@ -933,6 +996,69 @@ async function main() {
         (await readPending()) === null,
     );
     await popup22.close();
+
+    console.log('\nСценарий 23: options fallback — геометрия (radio scope, карточки, формы, ошибки, узкое окно)');
+    // Чистый конфиг: полная страница options как fallback через chrome://extensions.
+    await primeAndReload(baseConfig(), {
+      youtube: emptyService(),
+      instagram: emptyService(),
+      tiktok: emptyService(),
+    });
+    const geoOptions = await context.newPage();
+    await geoOptions.goto(`chrome-extension://${extensionId}/options.html`);
+    await geoOptions.getByLabel('Название нового сайта').waitFor({ state: 'visible', timeout: 5000 });
+    await checkGeometry(
+      check,
+      'options: геометрия по умолчанию (мультиколоночная сетка, radio scope YouTube)',
+      geoOptions,
+    );
+
+    // Длинные название/URL/сообщение в add-form.
+    const geoLongName = `Очень длинное название сайта ${'для проверки переноса '.repeat(6)}`.trim();
+    const geoLongUrl = `https://doomscroll-e2e.test/${'a'.repeat(200)}`;
+    const geoAddForm = geoOptions.locator('.add-site');
+    await geoOptions.getByLabel('Название нового сайта').fill(geoLongName);
+    await geoOptions.getByLabel('Адрес нового сайта (URL)').fill(geoLongUrl);
+    await geoAddForm.getByLabel('Сообщение').fill('Д'.repeat(400));
+    await checkGeometry(
+      check,
+      'options: геометрия с длинными названием/URL/сообщением в add-form',
+      geoOptions,
+    );
+
+    // Карточка custom-сайта с длинным названием (заголовок переносится внутри карточки).
+    await geoOptions.getByLabel('Адрес нового сайта (URL)').fill(CUSTOM_HOST);
+    await geoOptions.getByRole('button', { name: 'Добавить сайт' }).click();
+    await geoOptions
+      .getByRole('heading', { name: geoLongName })
+      .waitFor({ state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    check(
+      'карточка с длинным названием появилась в options',
+      (await geoOptions.getByRole('heading', { name: geoLongName }).count()) === 1,
+    );
+    await checkGeometry(
+      check,
+      'options: геометрия с карточкой custom-сайта (длинное название)',
+      geoOptions,
+    );
+
+    // Ошибка валидации: текст ошибки остаётся внутри карточки.
+    const geoSiteCard = geoOptions.locator('section.card', {
+      has: geoOptions.getByRole('heading', { name: geoLongName }),
+    });
+    await geoSiteCard.getByLabel(/Лимит сессии, минут/).fill('-1');
+    await geoOptions.getByRole('button', { name: 'Сохранить' }).click();
+    await geoSiteCard
+      .getByText(/Лимит сессии: целое число/)
+      .waitFor({ state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await checkGeometry(check, 'options: геометрия с ошибкой валидации лимита', geoOptions);
+
+    // Узкое окно: сетка схлопывается в одну колонку, инвариант тот же.
+    await geoOptions.setViewportSize({ width: 360, height: 600 });
+    await checkGeometry(check, 'options: геометрия в узком окне 360px (одна колонка)', geoOptions);
+    await geoOptions.close();
   } finally {
     await context.close().catch(() => {});
   }

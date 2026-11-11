@@ -143,6 +143,9 @@
 .radio input {
   accent-color: #2e6be6;
   flex: none;
+  /* Радио не наследует width:100% текстовых полей (.field input это
+     исключает) и не расталкивает текст label за пределы контейнера. */
+  width: auto;
 }
 
 .options__custom {
@@ -193,7 +196,10 @@
   margin-top: -8px;
 }
 
-.field input,
+/* Правило размеров только для текстовых полей: radio/checkbox исключены,
+   иначе width:100% растягивает их на всю ширину label/switch и выталкивает
+   текст за пределы контейнера. */
+.field input:not([type='radio']):not([type='checkbox']),
 .field select,
 .field textarea {
   font: inherit;
