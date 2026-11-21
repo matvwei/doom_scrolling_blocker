@@ -31,6 +31,8 @@ Custom sites use **optional permissions**: domain access is requested through a 
 
 See [docs/SPEC.md](docs/SPEC.md) for the detailed specification (currently in Russian).
 
+For AI agents and contributors: [AGENTS.md](AGENTS.md) contains mandatory workflow and architectural rules, [docs/AI_CONTEXT.md](docs/AI_CONTEXT.md) provides the module map and task playbook, and [.github/copilot-instructions.md](.github/copilot-instructions.md) configures GitHub Copilot.
+
 ## Requirements
 
 - Node.js ≥ 22 and npm

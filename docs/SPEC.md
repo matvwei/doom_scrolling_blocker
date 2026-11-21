@@ -1,5 +1,9 @@
 # Спецификация: Doomscroll Blocker
 
+Версия приложения: **0.4.1**. Репозиторий: `matvwei/doom_scrolling_blocker`, ветка `main`.
+Обязательные правила разработки и работы ИИ: `AGENTS.md`; практическая карта модулей:
+`docs/AI_CONTEXT.md`; краткие правила Copilot: `.github/copilot-instructions.md`.
+
 Браузерное расширение (Manifest V3, Chrome и Edge) против doomscrolling.
 Без собственного backend: конфигурация и статистика хранятся в
 `chrome.storage.local`. Единственный внешний запрос — проверка последнего релиза
@@ -68,7 +72,7 @@ interface ServiceConfig {
   dailyLimitMinutes: number;   // default: 45, целое 0..1440
   action: 'close' | 'redirect' | 'warning'; // default: 'warning'
   redirectUrl: string;         // default: '', обязателен и валиден (http/https) только для action='redirect'
-  message: string;             // default: 'Хватит doomscrollить. Пора вернуться к делам'
+  message: string;             // default локализован: ru 'Хватит doomscrollить…', en 'Enough doomscrolling…'
 }
 
 interface CustomSiteConfig extends ServiceConfig {
@@ -95,8 +99,9 @@ interface CustomSiteConfig extends ServiceConfig {
 ## 3. Разрешения и регистрация content script для custom-сайтов
 
 - Постоянный широкий доступ ко всем сайтам **не запрашивается**: в
-  `host_permissions` манифеста — только встроенные сервисы. `<all_urls>` в
-  обязательных правах отсутствует.
+  `host_permissions` манифеста — только встроенные сервисы и
+  `https://api.github.com/*` для проверки релиза. `<all_urls>` в обязательных
+  правах отсутствует.
 - Для custom-сайтов используются `optional_host_permissions:
   ['http://*/*', 'https://*/*']`. При сохранении настроек (клик «Сохранить»
   во встроенных настройках popup или на странице options) вызывается
@@ -351,11 +356,12 @@ hooks/            useExtensionData — данные из storage для React;
   нулевые: немедленное превышение, зачёлка, приоритет session), storage
   (миграции состояния, pruning удалённых сайков), permissions/scripting
   (request/отказ/duplicate/unregister/inject), сравнение версий и ответы GitHub
-  releases API, React-компоненты настроек
+  releases API, Web Audio и очистку контекста, overlay (однократный звук,
+  tamper-восстановление, штатное скрытие, RU/EN), React-компоненты настроек
   (add/remove/zero/область YouTube/отказ в разрешении/восстановление
-  прерванного сохранения) и popup (custom-список, view настроек внутри popup:
-  открытие/возврат, add/save custom-сайта, отказ в разрешении с черновиком,
-  текущая версия, ручная и автоматическая ветки обновления).
+  прерванного сохранения, английские ошибки) и popup (custom-список, view
+  настроек внутри popup, add/save, черновик, версия, обновления, переключение
+  и сохранение языка). Базовый подтверждённый объём — **180 тестов в 12 файлах**.
 - E2E: `npm run test:e2e` (Playwright, реальный браузер; e2e-сборка с
   предвыданным тестовым origin `https://*.doomscroll-e2e.test/*` выполняется
   автоматически). Страницы youtube.com и doomscroll-e2e.test перехватываются
@@ -381,6 +387,35 @@ hooks/            useExtensionData — данные из storage для React;
   **custom-сайт через UI: добавление, регистрация content script,
   warning с лимитом 0, независимые счётчики, удаление (подтверждение, снятие
   блокировки, unregister, очистка usage)** — через страницу options как
-  fallback, close custom-сайта с лимитом 0.
+  fallback, close custom-сайта с лимитом 0, **RU/EN: переключение и сохранение
+  языка, английская геометрия popup и английский overlay**. Подтверждённый
+  базовый объём — **126 проверок в 25 сценариях**.
   Нативный prompt разрешений Chrome недоступен автотесту — пути request/отказ
   покрыты юнит/компонентными тестами адаптеров и настроек.
+
+## 11. Правила разработки и работы ИИ
+
+Нормативные инструкции для агентов находятся в `AGENTS.md`; этот раздел фиксирует
+их связь с продуктовой спецификацией и не заменяет полный файл правил.
+
+- Источники истины: последний запрос пользователя → `AGENTS.md` → эта SPEC →
+  `docs/AI_CONTEXT.md` и README. Противоречия устраняются в той же задаче.
+- Любое логическое изменение проходит цикл: реализация → миграции/локализация →
+  тесты/документация → повышение SemVer → проверки → осознанный Conventional
+  Commit → `git push origin main` → чистое рабочее дерево.
+- Версия повышается даже для docs-only изменений. `npm version <версия>
+  --no-git-tag-version` обновляет package manifest и lockfile; WXT переносит
+  версию в расширение при сборке. Теги и публичные GitHub Releases создаются
+  только по явному запросу, обычный push релизом не является.
+- Для кода обязательны `npm test`, `npm run compile`, `npm run build`,
+  `npm run build:edge`, `npm run test:e2e`. Нельзя объявлять задачу завершённой
+  при красных проверках или неудачном push.
+- Доменная логика остаётся в `core`, Chrome API — в `adapters`, оркестрация — в
+  background, React-компоненты не дублируют бизнес-логику. Генерируемые
+  `.output/`, `.e2e-output/`, `.wxt/` и `node_modules/` вручную не редактируются.
+- Системные строки добавляются одновременно в RU/EN; `README.md` остаётся
+  английским, `README.ru.md` — синхронизированным русским. Поведение обновляется
+  в SPEC, архитектура и task playbook — в `docs/AI_CONTEXT.md`, краткие правила
+  Copilot — в `.github/copilot-instructions.md`.
+- Перед коммитом проверяются `git status --short` и `git diff --check`; в коммит
+  попадают только файлы задачи, без чужих изменений, секретов и артефактов.

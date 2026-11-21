@@ -406,7 +406,7 @@ async function main() {
     );
     await popupPage.goto(`chrome-extension://${extensionId}/popup.html`);
     await popupPage.getByText('Доступна версия 0.5.0').waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
-    check('popup показывает текущую версию из manifest', await popupPage.getByText('v0.4.0').isVisible());
+    check('popup показывает текущую версию из manifest', await popupPage.getByText('v0.4.1').isVisible());
     check(
       'popup показывает доступную версию GitHub',
       await popupPage.getByText('Доступна версия 0.5.0').isVisible(),

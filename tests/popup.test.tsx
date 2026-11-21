@@ -305,7 +305,7 @@ describe('Popup', () => {
 
     render(<PopupApp />);
 
-    expect(await screen.findByText('v0.4.0')).toBeInTheDocument();
+    expect(await screen.findByText('v0.4.1')).toBeInTheDocument();
     await waitFor(() => expect(fetch).toHaveBeenCalled());
     expect(screen.queryByRole('link', { name: 'Обновить дополнение' })).not.toBeInTheDocument();
   });

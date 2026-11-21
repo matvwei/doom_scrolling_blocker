@@ -31,6 +31,8 @@
 
 Подробная спецификация — [docs/SPEC.md](docs/SPEC.md).
 
+Для ИИ-агентов и контрибьюторов: [AGENTS.md](AGENTS.md) содержит обязательные правила работы и архитектурные инварианты, [docs/AI_CONTEXT.md](docs/AI_CONTEXT.md) — карту модулей и сценарии задач, [.github/copilot-instructions.md](.github/copilot-instructions.md) — правила GitHub Copilot.
+
 ## Требования
 
 - Node.js ≥ 22, npm
