@@ -74,6 +74,7 @@ function defaultService(overrides = {}) {
 function baseConfig() {
   return {
     version: 2,
+    language: 'ru',
     youtubeScope: 'shorts',
     services: {
       youtube: defaultService(),
@@ -400,15 +401,15 @@ async function main() {
       'https://api.github.com/repos/matvwei/doom_scrolling_blocker/releases/latest',
       (route) => route.fulfill({
         contentType: 'application/json',
-        body: JSON.stringify({ tag_name: 'v0.4.0' }),
+        body: JSON.stringify({ tag_name: 'v0.5.0' }),
       }),
     );
     await popupPage.goto(`chrome-extension://${extensionId}/popup.html`);
-    await popupPage.getByText('Доступна версия 0.4.0').waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
-    check('popup показывает текущую версию из manifest', await popupPage.getByText('v0.3.0').isVisible());
+    await popupPage.getByText('Доступна версия 0.5.0').waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+    check('popup показывает текущую версию из manifest', await popupPage.getByText('v0.4.0').isVisible());
     check(
       'popup показывает доступную версию GitHub',
-      await popupPage.getByText('Доступна версия 0.4.0').isVisible(),
+      await popupPage.getByText('Доступна версия 0.5.0').isVisible(),
     );
     check(
       'кнопка обновления ведёт к последнему релизу GitHub',
@@ -425,6 +426,25 @@ async function main() {
       check,
       'popup dashboard: элементы и тексты внутри контейнеров, без overflow',
       popupPage,
+    );
+
+    await popupPage.getByLabel('Язык интерфейса').selectOption('en');
+    await popupPage.getByRole('button', { name: 'Settings' }).waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+    check(
+      'popup переключается на английский',
+      await popupPage.getByRole('button', { name: 'Settings' }).isVisible(),
+    );
+    check(
+      'английский popup показывает обновление на выбранном языке',
+      await popupPage.getByText('Version 0.5.0 is available').isVisible(),
+    );
+    check('выбранный язык сохраняется', (await readStoredConfig())?.language === 'en');
+    await checkGeometry(check, 'popup dashboard EN: геометрия без overflow', popupPage);
+    await popupPage.getByLabel('Interface language').selectOption('ru');
+    await popupPage.getByRole('button', { name: 'Настройки' }).waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+    check(
+      'можно вернуть русский интерфейс',
+      await popupPage.getByRole('button', { name: 'Настройки' }).isVisible(),
     );
 
     // «Настройки» открывают настройки ВНУТРИ popup — без новой вкладки/страницы.
@@ -1112,6 +1132,30 @@ async function main() {
       (await overlayTextOf(reloadPage)).includes(MESSAGE),
     );
     await reloadPage.close().catch(() => {});
+
+    console.log('\nСценарий 25: английский язык применяется к blocking overlay');
+    const englishConfig = baseConfig();
+    englishConfig.language = 'en';
+    englishConfig.services.youtube = defaultService({
+      message: 'Enough doomscrolling. Time to get back to work',
+    });
+    await primeAndReload(englishConfig, primedYoutubeState());
+    const englishPage = await openFakePage('https://www.youtube.com/shorts/english-overlay');
+    await englishPage.locator('#dsb-overlay-host').waitFor({ state: 'attached', timeout: 10000 }).catch(() => {});
+    const englishOverlayText = await overlayTextOf(englishPage);
+    check(
+      'причина блокировки показана на английском',
+      englishOverlayText.includes('Session limit (15 min) reached'),
+    );
+    check(
+      'кнопка закрытия overlay переведена',
+      (await englishPage.getByRole('button', { name: 'Close tab' }).count()) === 1,
+    );
+    check(
+      'пользовательское сообщение overlay сохранено',
+      englishOverlayText.includes('Enough doomscrolling. Time to get back to work'),
+    );
+    await englishPage.close().catch(() => {});
   } finally {
     await context.close().catch(() => {});
   }

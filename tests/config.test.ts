@@ -291,4 +291,18 @@ describe('normalizeConfig', () => {
     const normalized = normalizeConfig({ customSites: [{ url: 'https://social.example.com/' }] });
     expect(normalized.customSites[0]!.name).toBe('social.example.com');
   });
+
+  it('сохраняет язык и подставляет локализованные значения по умолчанию', () => {
+    expect(normalizeConfig({}).language).toBe('ru');
+    const normalized = normalizeConfig({ language: 'en' });
+    expect(normalized.language).toBe('en');
+    expect(normalized.services.youtube.message).toBe('Enough doomscrolling. Time to get back to work');
+  });
+
+  it('возвращает ошибки валидации на английском языке', () => {
+    const config = getDefaultConfig('en');
+    config.services.youtube.sessionLimitMinutes = -1;
+    const errors = validateConfig(config);
+    expect(errors?.services?.youtube?.sessionLimitMinutes).toMatch(/whole number/);
+  });
 });

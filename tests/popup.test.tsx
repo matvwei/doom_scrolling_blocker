@@ -305,7 +305,7 @@ describe('Popup', () => {
 
     render(<PopupApp />);
 
-    expect(await screen.findByText('v0.3.0')).toBeInTheDocument();
+    expect(await screen.findByText('v0.4.0')).toBeInTheDocument();
     await waitFor(() => expect(fetch).toHaveBeenCalled());
     expect(screen.queryByRole('link', { name: 'Обновить дополнение' })).not.toBeInTheDocument();
   });
@@ -315,12 +315,12 @@ describe('Popup', () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({
       ok: true,
       status: 200,
-      json: async () => ({ tag_name: 'v0.4.0' }),
+      json: async () => ({ tag_name: 'v0.5.0' }),
     })));
 
     render(<PopupApp />);
 
-    expect(await screen.findByText('Доступна версия 0.4.0')).toBeInTheDocument();
+    expect(await screen.findByText('Доступна версия 0.5.0')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Обновить дополнение' })).toHaveAttribute(
       'href',
       'https://github.com/matvwei/doom_scrolling_blocker/releases/latest',
@@ -333,7 +333,7 @@ describe('Popup', () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({
       ok: true,
       status: 200,
-      json: async () => ({ tag_name: 'v0.4.0' }),
+      json: async () => ({ tag_name: 'v0.5.0' }),
     })));
 
     render(<PopupApp />);
@@ -342,5 +342,24 @@ describe('Popup', () => {
       await screen.findByText('Обновление найдено. Браузер установит его автоматически.'),
     ).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Обновить дополнение' })).not.toBeInTheDocument();
+  });
+
+  it('переключает интерфейс на английский и сохраняет выбранный язык', async () => {
+    const fake = installFakeChrome();
+    const user = userEvent.setup();
+
+    render(<PopupApp />);
+
+    await user.selectOptions(await screen.findByLabelText('Язык интерфейса'), 'en');
+    expect(await screen.findByRole('button', { name: 'Settings' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Enable TikTok' })).toBeInTheDocument();
+    await waitFor(() => {
+      const saved = fake.data.get(CONFIG_KEY) as ReturnType<typeof getDefaultConfig>;
+      expect(saved.language).toBe('en');
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument();
+    expect(await screen.findByLabelText('New site name')).toBeInTheDocument();
   });
 });

@@ -65,7 +65,7 @@ export function installFakeChrome(initial: Record<string, unknown> = {}): FakeCh
       },
     },
     runtime: {
-      getManifest: vi.fn(() => ({ name: 'Doomscroll Blocker', version: '0.3.0', manifest_version: 3 })),
+      getManifest: vi.fn(() => ({ name: 'Doomscroll Blocker', version: '0.4.0', manifest_version: 3 })),
       openOptionsPage: vi.fn(() => Promise.resolve()),
       requestUpdateCheck: vi.fn(() => Promise.resolve({ status: 'no_update' })),
     },
@@ -91,7 +91,7 @@ export function installFakeChrome(initial: Record<string, unknown> = {}): FakeCh
   vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({
     ok: true,
     status: 200,
-    json: () => Promise.resolve({ tag_name: 'v0.3.0' }),
+    json: () => Promise.resolve({ tag_name: 'v0.4.0' }),
   })));
 
   return {

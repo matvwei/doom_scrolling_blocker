@@ -1,4 +1,5 @@
 import type { LimitReason } from './limits';
+import type { Language } from './i18n';
 
 /** Content script → background: состояние видимости/фокуса документа вкладки. */
 export interface TabStateMessage {
@@ -21,6 +22,7 @@ export interface PingMessage {
 export interface OverlayMessage {
   type: 'dsb:overlay';
   show: boolean;
+  language?: Language;
   /** Отслеживаемая цель (ServiceId встроенного сервиса или id custom-сайта). */
   targetId?: string;
   serviceLabel?: string;

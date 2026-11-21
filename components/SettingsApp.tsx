@@ -24,7 +24,9 @@ import {
 } from '../adapters/storage';
 import { isResumablePendingConfig } from '../adapters/pendingResume';
 import { builtinLabel, SERVICE_IDS, type ServiceId } from '../core/services';
+import { translate, type Language, type MessageKey } from '../core/i18n';
 import { useExtensionData } from '../hooks/useExtensionData';
+import LanguageSwitcher from './LanguageSwitcher';
 
 /** Строковая форма полей — чтобы не терять ввод пользователя при частичном значении. */
 interface ServiceForm {
@@ -48,15 +50,11 @@ interface FormState {
   customSites: CustomSiteForm[];
 }
 
-const ACTION_LABELS: Record<LimitAction, string> = {
-  warning: 'Предупреждение (экран-блокировка)',
-  redirect: 'Перенаправление',
-  close: 'Закрыть вкладку',
+const ACTION_MESSAGE_KEYS: Record<LimitAction, MessageKey> = {
+  warning: 'actionWarning',
+  redirect: 'actionRedirect',
+  close: 'actionClose',
 };
-
-/** Пояснение, когда сохранение прервалось нативным запросом доступа. */
-const PERMISSION_INTERRUPTED_NOTICE =
-  'Сохранение было прервано запросом доступа к сайтам: доступ не подтверждён. Введённые данные восстановлены — разрешите доступ в запросе браузера и нажмите «Сохранить» ещё раз.';
 
 export interface SettingsAppProps {
   /**
@@ -96,8 +94,8 @@ function toForm(config: ExtensionConfig): FormState {
   };
 }
 
-function fromForm(form: FormState): ExtensionConfig {
-  const config = getDefaultConfig();
+function fromForm(form: FormState, language: Language): ExtensionConfig {
+  const config = getDefaultConfig(language);
   config.youtubeScope = form.youtubeScope;
   for (const id of SERVICE_IDS) {
     const service = form.services[id];
@@ -125,12 +123,12 @@ function fromForm(form: FormState): ExtensionConfig {
 }
 
 /** Черновик нового сайта: все поля правила сразу, в одну колонку. */
-function emptyNewSite(): CustomSiteForm {
+function emptyNewSite(language: Language = 'ru'): CustomSiteForm {
   return {
     id: '',
     name: '',
     url: '',
-    ...toServiceForm(getDefaultServiceConfig()),
+    ...toServiceForm(getDefaultServiceConfig(language)),
   };
 }
 
@@ -166,7 +164,7 @@ export default function SettingsApp({ compact = false, onBack }: SettingsAppProp
       if (!(await permissionsSatisfied(pending.customSites))) {
         if (!cancelled) {
           setRestoredDraft(pending);
-          setPermissionError(PERMISSION_INTERRUPTED_NOTICE);
+          setPermissionError(translate(pending.language, 'permissionInterrupted'));
         }
         return;
       }
@@ -183,7 +181,7 @@ export default function SettingsApp({ compact = false, onBack }: SettingsAppProp
       setRestoredDraft(fresh);
       setSaveStatus(ok ? 'saved' : 'error');
       if (!ok) {
-        setPermissionError('Не удалось сохранить восстановленные изменения — нажмите «Сохранить» ещё раз.');
+        setPermissionError(translate(fresh.language, 'permissionRestoreError'));
       }
     })()
       .catch(() => {})
@@ -198,12 +196,19 @@ export default function SettingsApp({ compact = false, onBack }: SettingsAppProp
   useEffect(() => {
     if (form || !draftChecked) return;
     const source = restoredDraft ?? config;
-    if (source) setForm(toForm(source));
+    if (source) {
+      setForm(toForm(source));
+      setNewSite(emptyNewSite(source.language));
+    }
   }, [config, form, restoredDraft, draftChecked]);
 
   if (!config || !form) {
-    return <div className="options-loading">Загрузка…</div>;
+    return <div className="options-loading">{translate(config?.language ?? 'ru', 'loading')}</div>;
   }
+
+  const language = config.language;
+  const t = (key: MessageKey, params: Record<string, string | number> = {}) =>
+    translate(language, key, params);
 
   const updateService = (id: ServiceId, patch: Partial<ServiceForm>) => {
     setForm({ ...form, services: { ...form.services, [id]: { ...form.services[id], ...patch } } });
@@ -228,15 +233,15 @@ export default function SettingsApp({ compact = false, onBack }: SettingsAppProp
     const name = newSite.name.trim();
     const url = normalizeCustomSiteUrl(newSite.url);
     if (!name) {
-      setAddError('Укажите название сайта');
+      setAddError(t('siteNameRequired'));
       return;
     }
     if (!url) {
-      setAddError('Адрес должен быть в формате https://домен[/раздел]');
+      setAddError(t('siteAddressFormatShort'));
       return;
     }
     if (form.customSites.some((site) => normalizeCustomSiteUrl(site.url) === url)) {
-      setAddError('Такой сайт уже добавлен');
+      setAddError(t('duplicateSite'));
       return;
     }
     setForm({
@@ -256,7 +261,7 @@ export default function SettingsApp({ compact = false, onBack }: SettingsAppProp
         },
       ],
     });
-    setNewSite(emptyNewSite());
+    setNewSite(emptyNewSite(language));
     setAddError(null);
     setSaveStatus('idle');
   };
@@ -264,19 +269,13 @@ export default function SettingsApp({ compact = false, onBack }: SettingsAppProp
   const handleRemoveSite = (id: string) => {
     const site = form.customSites.find((entry) => entry.id === id);
     if (!site) return;
-    if (
-      !window.confirm(
-        `Удалить сайт «${site.name}»?\nЕго статистика будет удалена, а доступ к домену — отозван.`,
-      )
-    ) {
-      return;
-    }
+    if (!window.confirm(t('deleteSiteConfirm', { name: site.name }))) return;
     setForm({ ...form, customSites: form.customSites.filter((entry) => entry.id !== id) });
     setSaveStatus('idle');
   };
 
   const handleSave = async () => {
-    const nextConfig = fromForm(form);
+    const nextConfig = fromForm(form, language);
     const validationErrors = validateConfig(nextConfig);
     setErrors(validationErrors ?? {});
     setPermissionError(null);
@@ -293,9 +292,7 @@ export default function SettingsApp({ compact = false, onBack }: SettingsAppProp
       await savePendingConfig(nextConfig);
       const permitted = await requestPermissionsForSites(nextConfig.customSites);
       if (!permitted) {
-        setPermissionError(
-          'Доступ к добавленным сайтам не подтверждён — настройки не сохранены. Повторите сохранение и разрешите доступ.',
-        );
+        setPermissionError(t('permissionDenied'));
         setSaveStatus('idle');
         return;
       }
@@ -310,11 +307,26 @@ export default function SettingsApp({ compact = false, onBack }: SettingsAppProp
   };
 
   const handleReset = () => {
-    setForm(toForm(getDefaultConfig()));
+    setForm(toForm(getDefaultConfig(language)));
+    setNewSite(emptyNewSite(language));
     setErrors({});
     setPermissionError(null);
     setSaveStatus('idle');
     void clearPendingConfig();
+  };
+
+  const handleLanguageChange = (nextLanguage: Language) => {
+    setErrors({});
+    setPermissionError(null);
+    setAddError(null);
+    setSaveStatus('idle');
+    setNewSite((current) => ({
+      ...current,
+      message: current.message === translate(language, 'defaultMessage')
+        ? translate(nextLanguage, 'defaultMessage')
+        : current.message,
+    }));
+    void saveConfig({ ...config, language: nextLanguage });
   };
 
   const serviceError = (id: ServiceId, field: keyof ServiceForm): string | undefined =>
@@ -333,7 +345,7 @@ export default function SettingsApp({ compact = false, onBack }: SettingsAppProp
   ) => (
     <>
       <div className="field">
-        <label htmlFor={`${owner}-session`}>Лимит сессии, минут (0 — блокировать сразу)</label>
+        <label htmlFor={`${owner}-session`}>{t('sessionLimitLabel')}</label>
         <input
           id={`${owner}-session`}
           type="number"
@@ -348,7 +360,7 @@ export default function SettingsApp({ compact = false, onBack }: SettingsAppProp
       </div>
 
       <div className="field">
-        <label htmlFor={`${owner}-daily`}>Дневной лимит, минут (0 — блокировать сразу)</label>
+        <label htmlFor={`${owner}-daily`}>{t('dailyLimitLabel')}</label>
         <input
           id={`${owner}-daily`}
           type="number"
@@ -372,15 +384,15 @@ export default function SettingsApp({ compact = false, onBack }: SettingsAppProp
   ) => (
     <>
       <div className="field">
-        <label htmlFor={`${owner}-action`}>Действие при исчерпании лимита</label>
+        <label htmlFor={`${owner}-action`}>{t('actionLabel')}</label>
         <select
           id={`${owner}-action`}
           value={values.action}
           onChange={(event) => onChange({ action: event.target.value as LimitAction })}
         >
-          {(Object.keys(ACTION_LABELS) as LimitAction[]).map((action) => (
+          {(Object.keys(ACTION_MESSAGE_KEYS) as LimitAction[]).map((action) => (
             <option key={action} value={action}>
-              {ACTION_LABELS[action]}
+              {t(ACTION_MESSAGE_KEYS[action])}
             </option>
           ))}
         </select>
@@ -388,7 +400,7 @@ export default function SettingsApp({ compact = false, onBack }: SettingsAppProp
 
       {values.action === 'redirect' && (
         <div className="field">
-          <label htmlFor={`${owner}-redirect`}>URL перенаправления</label>
+          <label htmlFor={`${owner}-redirect`}>{t('redirectUrlLabel')}</label>
           <input
             id={`${owner}-redirect`}
             type="text"
@@ -409,7 +421,7 @@ export default function SettingsApp({ compact = false, onBack }: SettingsAppProp
     errorFor: (field: 'message') => string | undefined,
   ) => (
     <div className="field">
-      <label htmlFor={`${owner}-message`}>Сообщение</label>
+      <label htmlFor={`${owner}-message`}>{t('messageLabel')}</label>
       <textarea
         id={`${owner}-message`}
         rows={3}
@@ -427,21 +439,20 @@ export default function SettingsApp({ compact = false, onBack }: SettingsAppProp
       {onBack && (
         <div className="settings__bar">
           <button type="button" className="button button--secondary settings__back" onClick={onBack}>
-            ← Назад
+            {t('back')}
           </button>
-          <h1 className="settings__title">Настройки</h1>
+          <h1 className="settings__title">{t('settings')}</h1>
         </div>
       )}
 
       {!compact && (
         <header className="options__header">
-          <h1>Настройки Doomscroll Blocker</h1>
-          <p>
-            Изменения применяются сразу после сохранения — переустанавливать расширение не нужно.
-            Лимит 0 минут означает блокировку сразу при открытии сайта.
-          </p>
+          <h1>{t('optionsTitle')}</h1>
+          <p>{t('optionsDescription')}</p>
         </header>
       )}
+
+      <LanguageSwitcher id="settings-language" language={language} onChange={handleLanguageChange} />
 
       <div className="options__cards">
         {SERVICE_IDS.map((id) => {
@@ -449,7 +460,7 @@ export default function SettingsApp({ compact = false, onBack }: SettingsAppProp
           return (
             <section key={id} className="card">
               <div className="card__head">
-                <h2 className="card__title">{builtinLabel(id, form.youtubeScope)}</h2>
+                <h2 className="card__title">{builtinLabel(id, form.youtubeScope, language)}</h2>
                 <label className="switch">
                   <input
                     type="checkbox"
@@ -463,7 +474,7 @@ export default function SettingsApp({ compact = false, onBack }: SettingsAppProp
               {id === 'youtube' && (
                 <div className="field">
                   <span className="field__label" id="youtube-scope-label">
-                    Область ограничения
+                    {t('scopeLabel')}
                   </span>
                   <div className="radio-row" role="radiogroup" aria-labelledby="youtube-scope-label">
                     <label className="radio">
@@ -476,7 +487,7 @@ export default function SettingsApp({ compact = false, onBack }: SettingsAppProp
                           setSaveStatus('idle');
                         }}
                       />
-                      Только Shorts
+                      {t('shortsOnly')}
                     </label>
                     <label className="radio">
                       <input
@@ -488,7 +499,7 @@ export default function SettingsApp({ compact = false, onBack }: SettingsAppProp
                           setSaveStatus('idle');
                         }}
                       />
-                      Весь YouTube (главная, видео, все страницы)
+                      {t('allYoutube')}
                     </label>
                   </div>
                 </div>
@@ -510,39 +521,34 @@ export default function SettingsApp({ compact = false, onBack }: SettingsAppProp
 
       <section className="options__custom">
         <div className="options__custom-head">
-          <h2>Пользовательские сайты</h2>
-          <p>
-            Блокируйте любые сайты или их разделы: адрес вида{' '}
-            <code>https://example.com</code> — весь домен с поддоменами,{' '}
-            <code>https://example.com/section</code> — раздел. Для нового домена браузер
-            запросит разрешение на доступ — без него сайт не будет добавлен.
-          </p>
+          <h2>{t('customSitesTitle')}</h2>
+          <p>{t('customSitesDescription')}</p>
         </div>
 
         <div className="add-site">
           <div className="field">
-            <label htmlFor="new-site-name">Название нового сайта</label>
+            <label htmlFor="new-site-name">{t('newSiteName')}</label>
             <input
               id="new-site-name"
               type="text"
-              placeholder="Например: Лента новостей"
+              placeholder={t('newSiteNamePlaceholder')}
               value={newSite.name}
               onChange={(event) => updateNewSite({ name: event.target.value })}
             />
           </div>
           <div className="field">
-            <label htmlFor="new-site-url">Адрес нового сайта (URL)</label>
+            <label htmlFor="new-site-url">{t('newSiteUrl')}</label>
             <input
               id="new-site-url"
               type="text"
-              placeholder="https://example.com[/раздел]"
+              placeholder={t('newSiteUrlPlaceholder')}
               value={newSite.url}
               onChange={(event) => updateNewSite({ url: event.target.value })}
             />
           </div>
           <div className="field field--switch">
             <span className="field__label" id="new-site-enabled-label">
-              Сайт включён
+              {t('siteEnabled')}
             </span>
             <label className="switch">
               <input
@@ -560,7 +566,7 @@ export default function SettingsApp({ compact = false, onBack }: SettingsAppProp
           {messageField('new-site', newSite, updateNewSite, noFieldError)}
 
           <button type="button" className="button button--secondary" onClick={handleAddSite}>
-            Добавить сайт
+            {t('addSite')}
           </button>
         </div>
         {addError && <div className="field__error add-site__error">{addError}</div>}
@@ -570,14 +576,14 @@ export default function SettingsApp({ compact = false, onBack }: SettingsAppProp
             {form.customSites.map((site) => (
               <section key={site.id} className="card card--custom">
                 <div className="card__head">
-                  <h3 className="card__title">{site.name || 'Сайт'}</h3>
+                  <h3 className="card__title">{site.name || t('genericSite')}</h3>
                   <div className="card__head-actions">
                     <label className="switch">
                       <input
                         type="checkbox"
                         checked={site.enabled}
                         onChange={(event) => updateSite(site.id, { enabled: event.target.checked })}
-                        aria-label={`Включить ${site.name || 'сайт'}`}
+                        aria-label={t('enableTarget', { name: site.name || t('genericSiteLower') })}
                       />
                       <span className="switch__slider" />
                     </label>
@@ -586,13 +592,13 @@ export default function SettingsApp({ compact = false, onBack }: SettingsAppProp
                       className="button button--danger"
                       onClick={() => handleRemoveSite(site.id)}
                     >
-                      Удалить сайт
+                      {t('deleteSite')}
                     </button>
                   </div>
                 </div>
 
                 <div className="field">
-                  <label htmlFor={`${site.id}-name`}>Название сайта</label>
+                  <label htmlFor={`${site.id}-name`}>{t('siteName')}</label>
                   <input
                     id={`${site.id}-name`}
                     type="text"
@@ -605,7 +611,7 @@ export default function SettingsApp({ compact = false, onBack }: SettingsAppProp
                 </div>
 
                 <div className="field">
-                  <label htmlFor={`${site.id}-url`}>Адрес сайта (URL)</label>
+                  <label htmlFor={`${site.id}-url`}>{t('siteUrl')}</label>
                   <input
                     id={`${site.id}-url`}
                     type="text"
@@ -643,14 +649,14 @@ export default function SettingsApp({ compact = false, onBack }: SettingsAppProp
 
       <div className="options__actions">
         <button type="button" className="button button--primary" onClick={() => void handleSave()}>
-          {saveStatus === 'saving' ? 'Сохранение…' : 'Сохранить'}
+          {saveStatus === 'saving' ? t('saving') : t('save')}
         </button>
         <button type="button" className="button button--secondary" onClick={handleReset}>
-          Сбросить к значениям по умолчанию
+          {t('resetDefaults')}
         </button>
-        {saveStatus === 'saved' && <span className="status status--ok">Сохранено</span>}
+        {saveStatus === 'saved' && <span className="status status--ok">{t('saved')}</span>}
         {saveStatus === 'error' && (
-          <span className="status status--error">Не удалось сохранить, попробуйте ещё раз</span>
+          <span className="status status--error">{t('saveError')}</span>
         )}
         {permissionError && <span className="status status--error">{permissionError}</span>}
       </div>

@@ -1,4 +1,5 @@
 import type { ServiceConfig } from './config';
+import { translate, type Language } from './i18n';
 import { localDayKey } from './time';
 
 export type LimitReason = 'session' | 'daily';
@@ -174,8 +175,12 @@ export function remainingTime(state: ServiceState, config: Pick<ServiceConfig, '
   };
 }
 
-export function reasonLabel(reason: LimitReason, config: Pick<ServiceConfig, 'sessionLimitMinutes' | 'dailyLimitMinutes'>): string {
+export function reasonLabel(
+  reason: LimitReason,
+  config: Pick<ServiceConfig, 'sessionLimitMinutes' | 'dailyLimitMinutes'>,
+  language: Language = 'ru',
+): string {
   return reason === 'session'
-    ? `Лимит сессии (${config.sessionLimitMinutes} мин) исчерпан`
-    : `Дневной лимит (${config.dailyLimitMinutes} мин) исчерпан`;
+    ? translate(language, 'sessionReason', { minutes: config.sessionLimitMinutes })
+    : translate(language, 'dailyReason', { minutes: config.dailyLimitMinutes });
 }

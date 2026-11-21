@@ -1,4 +1,5 @@
 import type { YouTubeScope } from './config';
+import { translate, type Language } from './i18n';
 
 export type ServiceId = 'youtube' | 'instagram' | 'tiktok';
 
@@ -9,8 +10,14 @@ export function isServiceId(id: string): id is ServiceId {
 }
 
 /** Отображаемое имя встроенного сервиса с учётом области YouTube. */
-export function builtinLabel(id: ServiceId, youtubeScope: YouTubeScope): string {
-  return id === 'youtube' && youtubeScope === 'all' ? 'YouTube (весь сайт)' : SERVICES[id].label;
+export function builtinLabel(
+  id: ServiceId,
+  youtubeScope: YouTubeScope,
+  language: Language = 'ru',
+): string {
+  return id === 'youtube' && youtubeScope === 'all'
+    ? translate(language, 'youtubeAllLabel')
+    : SERVICES[id].label;
 }
 
 export interface ServiceDef {

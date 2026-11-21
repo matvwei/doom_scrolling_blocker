@@ -503,4 +503,20 @@ describe('Options page: повреждённый черновик (DEFECT-6)', (
     expect(fake.data.has(PENDING_CONFIG_KEY)).toBe(false); // очищен
     expect(fake.data.has(CONFIG_KEY)).toBe(false); // и не применён
   });
+
+  it('рендерит английский интерфейс и локализованные ошибки', async () => {
+    installFakeChrome({ [CONFIG_KEY]: getDefaultConfig('en') });
+    const user = userEvent.setup();
+
+    render(<OptionsApp />);
+
+    await screen.findByRole('heading', { name: 'Doomscroll Blocker settings' });
+    expect(await screen.findByLabelText('New site name')).toBeInTheDocument();
+    const youtube = within(serviceCard('YouTube Shorts'));
+    await user.clear(youtube.getByLabelText(/Session limit, minutes/));
+    await user.type(youtube.getByLabelText(/Session limit, minutes/), '-1');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByText(/Session limit: a whole number/)).toBeInTheDocument();
+  });
 });

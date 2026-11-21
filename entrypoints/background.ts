@@ -15,6 +15,7 @@ import {
 import { isCloseTabMessage, isTabStateMessage, type OverlayMessage } from '../core/messages';
 import { classifyUrl } from '../core/matching';
 import { builtinLabel, isServiceId } from '../core/services';
+import { translate } from '../core/i18n';
 import { CONFIG_KEY, clearPendingConfig, loadConfig, loadState, saveState, type StoredState } from '../adapters/storage';
 import { tryResumePendingConfig } from '../adapters/pendingResume';
 import {
@@ -85,8 +86,8 @@ export default defineBackground(() => {
   }
 
   function labelForTarget(target: string): string {
-    if (isServiceId(target)) return builtinLabel(target, config.youtubeScope);
-    return config.customSites.find((site) => site.id === target)?.name ?? 'Сайт';
+    if (isServiceId(target)) return builtinLabel(target, config.youtubeScope, config.language);
+    return config.customSites.find((site) => site.id === target)?.name ?? translate(config.language, 'genericSite');
   }
 
   /** Состояние цели; лениво создаётся для только что добавленных сайтов. */
@@ -151,10 +152,13 @@ export default defineBackground(() => {
     return {
       type: 'dsb:overlay',
       show: true,
+      language: config.language,
       targetId: target,
       serviceLabel: labelForTarget(target),
       reason,
-      reasonText: targetConfig ? reasonLabel(reason, targetConfig) : 'Лимит времени исчерпан',
+      reasonText: targetConfig
+        ? reasonLabel(reason, targetConfig, config.language)
+        : translate(config.language, 'timeLimitExceeded'),
       message: targetConfig?.message ?? '',
       redirectUrl: targetConfig?.redirectUrl || null,
     };

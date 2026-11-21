@@ -1,6 +1,7 @@
 import { generateSiteId, normalizeCustomSiteUrl, parseCustomSiteUrl } from './customSites';
 import { makeIsTracked } from './matching';
 import { SERVICE_IDS, type ServiceId } from './services';
+import { DEFAULT_LANGUAGE, translate, type Language } from './i18n';
 
 export type LimitAction = 'close' | 'redirect' | 'warning';
 export const LIMIT_ACTIONS: readonly LimitAction[] = ['close', 'redirect', 'warning'];
@@ -29,12 +30,13 @@ export interface CustomSiteConfig extends ServiceConfig {
 
 export interface ExtensionConfig {
   version: 2;
+  language: Language;
   youtubeScope: YouTubeScope;
   services: Record<ServiceId, ServiceConfig>;
   customSites: CustomSiteConfig[];
 }
 
-export const DEFAULT_MESSAGE = 'Хватит doomscrollить. Пора вернуться к делам';
+export const DEFAULT_MESSAGE = translate('ru', 'defaultMessage');
 
 /**
  * Лимиты — целые минуты. 0 допустим и означает «блокировать сразу»:
@@ -50,25 +52,26 @@ export const LIMITS = {
   siteNameMaxLength: 100,
 } as const;
 
-export function getDefaultServiceConfig(): ServiceConfig {
+export function getDefaultServiceConfig(language: Language = DEFAULT_LANGUAGE): ServiceConfig {
   return {
     enabled: true,
     sessionLimitMinutes: 15,
     dailyLimitMinutes: 45,
     action: 'warning',
     redirectUrl: '',
-    message: DEFAULT_MESSAGE,
+    message: translate(language, 'defaultMessage'),
   };
 }
 
-export function getDefaultConfig(): ExtensionConfig {
+export function getDefaultConfig(language: Language = DEFAULT_LANGUAGE): ExtensionConfig {
   return {
     version: 2,
+    language,
     youtubeScope: 'shorts',
     services: {
-      youtube: getDefaultServiceConfig(),
-      instagram: getDefaultServiceConfig(),
-      tiktok: getDefaultServiceConfig(),
+      youtube: getDefaultServiceConfig(language),
+      instagram: getDefaultServiceConfig(language),
+      tiktok: getDefaultServiceConfig(language),
     },
     customSites: [],
   };
@@ -103,11 +106,12 @@ const isBuiltinTrackedDefault = makeIsTracked({ youtubeScope: 'shorts', customSi
 export function validateServiceConfig(
   cfg: ServiceConfig,
   isTracked: (rawUrl: string) => boolean = isBuiltinTrackedDefault,
+  language: Language = DEFAULT_LANGUAGE,
 ): ServiceConfigErrors {
   const errors: ServiceConfigErrors = {};
 
   if (typeof cfg.enabled !== 'boolean') {
-    errors.enabled = 'Некорректное значение включения';
+    errors.enabled = translate(language, 'invalidEnabled');
   }
 
   if (
@@ -116,7 +120,10 @@ export function validateServiceConfig(
     cfg.sessionLimitMinutes < LIMITS.sessionMin ||
     cfg.sessionLimitMinutes > LIMITS.sessionMax
   ) {
-    errors.sessionLimitMinutes = `Лимит сессии: целое число от ${LIMITS.sessionMin} до ${LIMITS.sessionMax} минут (0 — блокировать сразу)`;
+    errors.sessionLimitMinutes = translate(language, 'sessionLimitError', {
+      min: LIMITS.sessionMin,
+      max: LIMITS.sessionMax,
+    });
   }
 
   if (
@@ -125,28 +132,31 @@ export function validateServiceConfig(
     cfg.dailyLimitMinutes < LIMITS.dailyMin ||
     cfg.dailyLimitMinutes > LIMITS.dailyMax
   ) {
-    errors.dailyLimitMinutes = `Дневной лимит: целое число от ${LIMITS.dailyMin} до ${LIMITS.dailyMax} минут (0 — блокировать сразу)`;
+    errors.dailyLimitMinutes = translate(language, 'dailyLimitError', {
+      min: LIMITS.dailyMin,
+      max: LIMITS.dailyMax,
+    });
   }
 
   if (!LIMIT_ACTIONS.includes(cfg.action)) {
-    errors.action = 'Неизвестное действие';
+    errors.action = translate(language, 'unknownAction');
   }
 
   if (cfg.action === 'redirect') {
     if (!cfg.redirectUrl.trim()) {
-      errors.redirectUrl = 'URL обязателен для действия «Перенаправление»';
+      errors.redirectUrl = translate(language, 'redirectRequired');
     } else if (!isValidHttpUrl(cfg.redirectUrl)) {
-      errors.redirectUrl = 'URL должен начинаться с http:// или https://';
+      errors.redirectUrl = translate(language, 'invalidHttpUrl');
     } else if (isTracked(cfg.redirectUrl)) {
       // Иначе перенаправление мгновенно снова попадало бы под блокировку — бесконечный цикл.
-      errors.redirectUrl = 'URL не должен вести на отслеживаемую зону (YouTube, Instagram, TikTok или добавленный сайт)';
+      errors.redirectUrl = translate(language, 'redirectTracked');
     }
   }
 
   if (typeof cfg.message !== 'string' || !cfg.message.trim()) {
-    errors.message = 'Сообщение не должно быть пустым';
+    errors.message = translate(language, 'messageRequired');
   } else if (cfg.message.length > LIMITS.messageMaxLength) {
-    errors.message = `Сообщение длиннее ${LIMITS.messageMaxLength} символов`;
+    errors.message = translate(language, 'messageTooLong', { max: LIMITS.messageMaxLength });
   }
 
   return errors;
@@ -155,20 +165,21 @@ export function validateServiceConfig(
 export function validateCustomSite(
   site: CustomSiteConfig,
   isTracked: (rawUrl: string) => boolean = isBuiltinTrackedDefault,
+  language: Language = DEFAULT_LANGUAGE,
 ): CustomSiteErrors {
-  const errors: CustomSiteErrors = validateServiceConfig(site, isTracked);
+  const errors: CustomSiteErrors = validateServiceConfig(site, isTracked, language);
 
   const name = site.name.trim();
   if (!name) {
-    errors.name = 'Укажите название сайта';
+    errors.name = translate(language, 'siteNameRequired');
   } else if (name.length > LIMITS.siteNameMaxLength) {
-    errors.name = `Название длиннее ${LIMITS.siteNameMaxLength} символов`;
+    errors.name = translate(language, 'siteNameTooLong', { max: LIMITS.siteNameMaxLength });
   }
 
   if (!site.url.trim()) {
-    errors.url = 'Укажите адрес сайта';
+    errors.url = translate(language, 'siteUrlRequired');
   } else if (parseCustomSiteUrl(site.url) === null) {
-    errors.url = 'Адрес должен быть в формате http(s)://домен[/раздел] — без логина, пароля и нестандартного порта';
+    errors.url = translate(language, 'invalidSiteUrl');
   }
 
   return errors;
@@ -190,7 +201,7 @@ export function validateConfig(config: ExtensionConfig): ConfigErrors | null {
 
   const services: Partial<Record<ServiceId, ServiceConfigErrors>> = {};
   for (const id of SERVICE_IDS) {
-    const serviceErrors = validateServiceConfig(config.services[id], isTracked);
+    const serviceErrors = validateServiceConfig(config.services[id], isTracked, config.language);
     if (Object.keys(serviceErrors).length > 0) {
       services[id] = serviceErrors;
     }
@@ -200,7 +211,7 @@ export function validateConfig(config: ExtensionConfig): ConfigErrors | null {
   const customSites: Record<string, CustomSiteErrors> = {};
   const seenUrls = new Map<string, string>(); // нормализованный адрес -> id первого сайта
   for (const site of config.customSites) {
-    const siteErrors = validateCustomSite(site, isTracked);
+    const siteErrors = validateCustomSite(site, isTracked, config.language);
 
     // Дубликат адреса возможен через редактирование карточки — та же
     // нормализация и сравнение, что при добавлении (см. options).
@@ -208,7 +219,7 @@ export function validateConfig(config: ExtensionConfig): ConfigErrors | null {
     if (normalized) {
       const firstId = seenUrls.get(normalized);
       if (firstId !== undefined && firstId !== site.id) {
-        siteErrors.url = 'Такой сайт уже добавлен';
+        siteErrors.url = translate(config.language, 'duplicateSite');
       } else {
         seenUrls.set(normalized, site.id);
       }
@@ -252,7 +263,7 @@ function clamp(value: number, min: number, max: number): number {
  * к корректному виду: правила с неразбираемым адресом отбрасываются,
  * повреждённые поля — к дефолтам, id дедуплицируются.
  */
-function normalizeCustomSites(raw: unknown): CustomSiteConfig[] {
+function normalizeCustomSites(raw: unknown, language: Language): CustomSiteConfig[] {
   if (!Array.isArray(raw)) return [];
 
   const result: CustomSiteConfig[] = [];
@@ -268,16 +279,17 @@ function normalizeCustomSites(raw: unknown): CustomSiteConfig[] {
     seenIds.add(id);
 
     const rule = parseCustomSiteUrl(url);
+    const fallbackName = rule?.domain ?? translate(language, 'genericSite');
     result.push({
       id,
-      name: coerceString(rawSite.name, rule?.domain ?? 'Сайт').trim() || (rule?.domain ?? 'Сайт'),
+      name: coerceString(rawSite.name, fallbackName).trim() || fallbackName,
       url,
       enabled: coerceBoolean(rawSite.enabled, true),
       sessionLimitMinutes: clamp(coerceInteger(rawSite.sessionLimitMinutes, 15), LIMITS.sessionMin, LIMITS.sessionMax),
       dailyLimitMinutes: clamp(coerceInteger(rawSite.dailyLimitMinutes, 45), LIMITS.dailyMin, LIMITS.dailyMax),
       action: coerceAction(rawSite.action, 'warning'),
       redirectUrl: coerceString(rawSite.redirectUrl, ''),
-      message: coerceString(rawSite.message, DEFAULT_MESSAGE),
+      message: coerceString(rawSite.message, translate(language, 'defaultMessage')),
     });
   }
   return result;
@@ -290,10 +302,11 @@ function normalizeCustomSites(raw: unknown): CustomSiteConfig[] {
  * custom-сайтов; счётчики хранятся отдельно и не затрагиваются.
  */
 export function normalizeConfig(raw: unknown): ExtensionConfig {
-  const defaults = getDefaultConfig();
-  if (typeof raw !== 'object' || raw === null) return defaults;
+  if (typeof raw !== 'object' || raw === null) return getDefaultConfig();
 
   const rawConfig = raw as Record<string, unknown>;
+  const language: Language = rawConfig.language === 'en' ? 'en' : DEFAULT_LANGUAGE;
+  const defaults = getDefaultConfig(language);
   const rawServices = (rawConfig.services ?? {}) as Record<string, unknown>;
 
   const services = {} as Record<ServiceId, ServiceConfig>;
@@ -320,8 +333,9 @@ export function normalizeConfig(raw: unknown): ExtensionConfig {
 
   return {
     version: 2,
+    language,
     youtubeScope: rawConfig.youtubeScope === 'all' ? 'all' : 'shorts',
     services,
-    customSites: normalizeCustomSites(rawConfig.customSites),
+    customSites: normalizeCustomSites(rawConfig.customSites, language),
   };
 }

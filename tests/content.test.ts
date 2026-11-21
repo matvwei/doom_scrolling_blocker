@@ -80,4 +80,22 @@ describe('DoomscrollOverlay', () => {
     expect(confirm).not.toHaveBeenCalled();
     expect(document.getElementById('dsb-overlay-host')).toBeNull();
   });
+
+  it('использует английские кнопки и вопрос при language=en', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    overlay.show({
+      ...payload,
+      language: 'en',
+      reasonText: 'Session limit reached',
+      redirectUrl: 'https://example.com',
+    });
+
+    const host = document.getElementById('dsb-overlay-host');
+    expect(host?.shadowRoot?.textContent).toContain('Close tab');
+    expect(host?.shadowRoot?.textContent).toContain('Go');
+
+    host?.remove();
+    await vi.waitFor(() => expect(confirm).toHaveBeenCalledOnce());
+    expect(confirm).toHaveBeenCalledWith('Are you sure you want to keep wasting your time?');
+  });
 });

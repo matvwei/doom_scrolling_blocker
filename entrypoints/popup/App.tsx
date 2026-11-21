@@ -4,9 +4,11 @@ import { emptyServiceState, remainingTime, type ServiceState } from '../../core/
 import { builtinLabel, SERVICE_IDS } from '../../core/services';
 import { formatClock } from '../../core/time';
 import { GITHUB_RELEASES_URL } from '../../core/updates';
+import { translate, type Language, type MessageKey } from '../../core/i18n';
 import { useExtensionData } from '../../hooks/useExtensionData';
 import { useUpdates } from '../../hooks/useUpdates';
 import SettingsApp from '../../components/SettingsApp';
+import LanguageSwitcher from '../../components/LanguageSwitcher';
 
 function toggleService(config: ExtensionConfig, serviceId: (typeof SERVICE_IDS)[number]): ExtensionConfig {
   return {
@@ -40,9 +42,12 @@ export default function App() {
   // Настройки открываются внутри popup (view), без отдельной страницы/вкладки.
   // Полная страница options остаётся fallback через chrome://extensions.
   const [view, setView] = useState<'dashboard' | 'settings'>('dashboard');
+  const language = config?.language ?? 'ru';
+  const t = (key: MessageKey, params: Record<string, string | number> = {}) =>
+    translate(language, key, params);
 
   if (!config || !state) {
-    return <div className="popup-loading">Загрузка…</div>;
+    return <div className="popup-loading">{t('loading')}</div>;
   }
 
   if (view === 'settings') {
@@ -67,20 +72,26 @@ export default function App() {
           className="popup__settings"
           onClick={() => setView('settings')}
         >
-          Настройки
+          {t('settings')}
         </button>
       </header>
 
+      <LanguageSwitcher
+        id="popup-language"
+        language={language}
+        onChange={(nextLanguage: Language) => void saveConfig({ ...config, language: nextLanguage })}
+      />
+
       {!updates.checking && updates.updateAvailable && (
-        <section className="update" aria-label="Обновление расширения">
+        <section className="update" aria-label={t('updateSection')}>
           {updates.automaticUpdate ? (
-            <span>Обновление найдено. Браузер установит его автоматически.</span>
+            <span>{t('updateInstalling')}</span>
           ) : (
             <>
               <span>
                 {updates.latestVersion
-                  ? `Доступна версия ${updates.latestVersion}`
-                  : 'Доступно обновление'}
+                  ? t('availableVersion', { version: updates.latestVersion })
+                  : t('updateAvailable')}
               </span>
               <a
                 className="update__button"
@@ -88,7 +99,7 @@ export default function App() {
                 target="_blank"
                 rel="noreferrer"
               >
-                Обновить дополнение
+                {t('updateButton')}
               </a>
             </>
           )}
@@ -101,7 +112,7 @@ export default function App() {
           const serviceState = targetStats(state, serviceId);
           const remaining = remainingTime(serviceState, serviceConfig);
           const blocked = serviceState.blockedReason !== null;
-          const label = builtinLabel(serviceId, config.youtubeScope);
+          const label = builtinLabel(serviceId, config.youtubeScope, language);
 
           return (
             <li key={serviceId} className="service">
@@ -112,7 +123,7 @@ export default function App() {
                     type="checkbox"
                     checked={serviceConfig.enabled}
                     onChange={() => void saveConfig(toggleService(config, serviceId))}
-                    aria-label={`Включить ${label}`}
+                    aria-label={t('enableTarget', { name: label })}
                   />
                   <span className="switch__slider" />
                 </label>
@@ -120,20 +131,20 @@ export default function App() {
 
               <div className="service__stats">
                 <div className="stat">
-                  <span className="stat__label">Сессия</span>
+                  <span className="stat__label">{t('session')}</span>
                   <span className={`stat__value${blocked && serviceState.blockedReason === 'session' ? ' stat__value--empty' : ''}`}>
                     {serviceConfig.enabled ? formatClock(remaining.sessionSeconds) : '—'}
                   </span>
                 </div>
                 <div className="stat">
-                  <span className="stat__label">День</span>
+                  <span className="stat__label">{t('day')}</span>
                   <span className={`stat__value${blocked && serviceState.blockedReason === 'daily' ? ' stat__value--empty' : ''}`}>
                     {serviceConfig.enabled ? formatClock(remaining.dailySeconds) : '—'}
                   </span>
                 </div>
               </div>
 
-              {blocked && <div className="service__blocked">Лимит исчерпан</div>}
+              {blocked && <div className="service__blocked">{t('limitExhausted')}</div>}
             </li>
           );
         })}
@@ -152,7 +163,7 @@ export default function App() {
                     type="checkbox"
                     checked={site.enabled}
                     onChange={() => void saveConfig(toggleCustomSite(config, site.id))}
-                    aria-label={`Включить ${site.name}`}
+                    aria-label={t('enableTarget', { name: site.name })}
                   />
                   <span className="switch__slider" />
                 </label>
@@ -160,29 +171,26 @@ export default function App() {
 
               <div className="service__stats">
                 <div className="stat">
-                  <span className="stat__label">Сессия</span>
+                  <span className="stat__label">{t('session')}</span>
                   <span className={`stat__value${blocked && serviceState.blockedReason === 'session' ? ' stat__value--empty' : ''}`}>
                     {site.enabled ? formatClock(remaining.sessionSeconds) : '—'}
                   </span>
                 </div>
                 <div className="stat">
-                  <span className="stat__label">День</span>
+                  <span className="stat__label">{t('day')}</span>
                   <span className={`stat__value${blocked && serviceState.blockedReason === 'daily' ? ' stat__value--empty' : ''}`}>
                     {site.enabled ? formatClock(remaining.dailySeconds) : '—'}
                   </span>
                 </div>
               </div>
 
-              {blocked && <div className="service__blocked">Лимит исчерпан</div>}
+              {blocked && <div className="service__blocked">{t('limitExhausted')}</div>}
             </li>
           );
         })}
       </ul>
 
-      <footer className="popup__footer">
-        Лимиты сессии сбрасываются после 10 минут без активности. Лимит 0 минут блокирует сайт
-        сразу при открытии.
-      </footer>
+      <footer className="popup__footer">{t('dashboardFooter')}</footer>
     </div>
   );
 }

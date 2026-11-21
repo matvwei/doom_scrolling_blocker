@@ -1,161 +1,110 @@
 # Doomscroll Blocker
 
-Браузерное расширение (Manifest V3 для Chrome и Edge) против doomscrolling:
-лимиты времени для YouTube, Instagram Reels, TikTok и собственных сайтов.
-Когда лимит исчерпан — показывает блокирующий экран, перенаправляет или
-закрывает вкладку.
+**English** | [Русский](README.ru.md)
 
-Без собственного backend: конфигурация и статистика хранятся в
-`chrome.storage.local`. При открытии popup выполняется запрос к публичному
-GitHub API для проверки последнего релиза; пользовательские данные не отправляются.
+A Manifest V3 browser extension for Chrome and Edge that helps prevent doomscrolling with time limits for YouTube, Instagram Reels, TikTok, and custom sites. When a limit is reached, it shows a blocking screen, redirects the tab, or closes it.
 
-## Возможности
+There is no custom backend: configuration and statistics are stored in `chrome.storage.local`. Opening the popup makes a request to the public GitHub API to check the latest release; no user data is sent.
 
-- **YouTube** — область ограничения на выбор: «Только Shorts» (`/shorts`,
-  обратная совместимость) или «Весь YouTube» (главная, `/watch`, все страницы).
-  Смена области применяется сразу, без переустановки.
-- **Instagram Reels** — лента `/`, `/reels/*`, `/reel/*`; профили, посты и сообщения не трогаются.
-- **TikTok** — весь сайт.
-- **Пользовательские сайты** — добавляйте свои правила через настройки (без
-  JSON): `https://example.com` блокирует домен с поддоменами,
-  `https://example.com/section` — раздел. Для каждого сайта — независимые
-  счётчики и свой набор настроек.
-- **Версия и обновления** — popup показывает текущую версию из manifest,
-  запрашивает штатное обновление через `chrome.runtime.requestUpdateCheck()` и
-  сравнивает её с последним релизом GitHub. Если браузер не может установить
-  обновление автоматически, появляется кнопка «Обновить дополнение» со ссылкой
-  на релиз. ZIP с GitHub не устанавливается программно: ручная распаковка
-  требуется для установленного в режиме разработчика расширения.
-- **Режимные лимиты**: 0 минут означает «блокировать сразу» — действие
-  срабатывает при первом открытии сайта, без ожидания накопления времени.
-- Учёт только активного времени: вкладка активна, окно в фокусе, документ видим.
-- Два независимых лимита на цель: сессия (сброс после 10 минут без активности)
-  и день (сброс в локальную полночь).
-- Действия: `warning` (блокирующий overlay с вашим текстом и коротким звуковым
-  сигналом при появлении), `redirect`, `close`. Сигнал звучит один раз на каждый
-  новый показ предупреждения, а не при его повторных обновлениях.
-  Пока лимит исчерпан, блокируется каждая вкладка цели — включая новые и при
-  SPA-навигации; после полной перезагрузки заблокированной страницы overlay
-  показывается заново. При уходе на обычные страницы, росте лимита, отключении
-  или удалении сайта overlay скрывается, а счётчики сохраняются.
-  Удаление или изменение overlay через DOM обнаруживается: предупреждение
-  восстанавливается и задаёт вопрос «А точно ли ты хочешь продолжить дальше
-  страдать фигней?», не снимая ограничение.
-- `redirectUrl` не может вести на отслеживаемую зону (любую цель с учётом
-  области YouTube и custom-сайтов) — защита от бесконечного цикла.
-- SPA-навигация обрабатывается корректно.
+## Features
 
-## Приватность и разрешения
+- **Russian and English interface** — switch languages in the popup or settings. The choice is saved and also applies to the blocking screen, validation errors, and confirmation prompts.
+- **YouTube** — choose between “Shorts only” (`/shorts`, backward-compatible behavior) and “Entire YouTube” (home, `/watch`, and all pages). Changes apply immediately without reinstalling.
+- **Instagram Reels** — the `/` feed, `/reels/*`, and `/reel/*`; profiles, posts, and messages are unaffected.
+- **TikTok** — the entire site.
+- **Custom sites** — add rules through the settings UI without JSON: `https://example.com` blocks the domain and its subdomains, while `https://example.com/section` blocks one section. Each site has independent counters and settings.
+- **Version and updates** — the popup shows the current manifest version, requests a browser update through `chrome.runtime.requestUpdateCheck()`, and compares the version with the latest GitHub release. If the browser cannot install it automatically, an **Update extension** button links to the release. ZIP files from GitHub are not installed programmatically: developer-mode installations require a manual update.
+- **Immediate limits** — 0 minutes means “block immediately”: the action runs when a tracked page first opens.
+- Only active time is counted: the tab is active, its window is focused, and the document is visible.
+- Two independent limits per target: session (reset after 10 minutes of inactivity) and day (reset at local midnight).
+- Actions: `warning` (a blocking overlay with your message and a short sound), `redirect`, and `close`. The sound plays once per new overlay, not on repeated updates.
+- While the limit is exhausted, every target tab is blocked, including new tabs and SPA navigation. After a full page reload, the overlay appears again. It is hidden when leaving tracked pages, raising a limit, disabling a target, or deleting a site; counters are preserved.
+- Removing or modifying the overlay through the DOM is detected: it is restored and asks for confirmation without lifting the restriction.
+- `redirectUrl` cannot point to a tracked area, preventing infinite redirect loops.
+- SPA navigation is handled correctly.
 
-Постоянный доступ к сайтам — только к YouTube, Instagram и TikTok. Отдельно
-разрешён `https://api.github.com/` для получения номера последней версии;
-запрос не содержит конфигурацию, статистику или другие пользовательские данные.
-Для пользовательских сайтов используются **optional permissions**: доступ к
-домену запрашивается один раз в момент сохранения настроек (нативный запрос
-браузера), отзывается при удалении сайта. Если доступ не подтверждён — сайт не
-добавляется и показывается ошибка. Широкий доступ ко всем сайтам (`<all_urls>`)
-не запрашивается.
+## Privacy and permissions
 
-Подробная спецификация — [docs/SPEC.md](docs/SPEC.md).
+Permanent site access is limited to YouTube, Instagram, and TikTok. Separate access to `https://api.github.com/` is used only to retrieve the latest version number; the request contains no configuration, statistics, or other user data.
 
-## Требования
+Custom sites use **optional permissions**: domain access is requested through a native browser prompt when settings are saved and revoked when the site is removed. If access is denied, the site is not added and an error is shown. Broad `<all_urls>` access is never requested.
 
-- Node.js ≥ 22, npm
-- Для E2E: установленный Chrome или Edge (Playwright использует системный браузер)
+See [docs/SPEC.md](docs/SPEC.md) for the detailed specification (currently in Russian).
 
-## Установка зависимостей
+## Requirements
+
+- Node.js ≥ 22 and npm
+- Chrome or Edge for E2E tests (Playwright uses an installed browser or its bundled Chromium)
+
+## Install dependencies
 
 ```bash
 npm install
 ```
 
-## Разработка
+## Development
 
 ```bash
-npm run dev          # dev-сервер WXT с авто-пересборкой
+npm run dev          # WXT dev server with automatic rebuilds
 ```
 
-## Сборка
+## Build
 
 ```bash
 npm run build        # Chrome MV3 -> .output/chrome-mv3
 npm run build:edge   # Edge MV3   -> .output/edge-mv3
-npm run zip          # zip-архивы для публикации -> .output/*-mv3.zip
+npm run zip          # Publication archives -> .output/*-mv3.zip
 ```
 
-## Ручная установка расширения
+## Manual installation
 
 Chrome:
 
-1. Откройте `chrome://extensions`.
-2. Включите «Режим разработчика».
-3. «Загрузить распакованное расширение» → выберите папку `.output/chrome-mv3`.
+1. Open `chrome://extensions`.
+2. Enable **Developer mode**.
+3. Click **Load unpacked** and select `.output/chrome-mv3`.
 
 Edge:
 
-1. Откройте `edge://extensions`.
-2. Включите «Режим разработчика».
-3. «Загрузить распакованное» → выберите папку `.output/edge-mv3`.
+1. Open `edge://extensions`.
+2. Enable **Developer mode**.
+3. Click **Load unpacked** and select `.output/edge-mv3`.
 
-После установки настройте сервисы прямо из popup: кнопка «Настройки»
-переключает popup на встроенный экран настроек (без открытия новой вкладки) —
-лимиты, действие, URL перенаправления, текст сообщения, область YouTube и
-пользовательские сайты. Полная страница `options.html` остаётся как fallback:
-«Расширения → Doomscroll Blocker → Параметры» в `chrome://extensions`.
+After installation, configure services directly from the popup. **Settings** switches the popup to its built-in settings view without opening another tab. It includes limits, actions, redirect URLs, messages, YouTube scope, interface language, and custom sites. The full `options.html` page remains available as a fallback through **Extensions → Doomscroll Blocker → Details → Extension options**.
 
-## Тесты
+## Tests
 
 ```bash
-npm test             # юнит-тесты: Vitest + React Testing Library (175 тестов)
-npm run compile      # typecheck без эмиссии (tsc --noEmit)
-npm run build        # production-сборка должна проходить без ошибок
-npm run build:edge   # сборка для Edge
-npm run test:e2e     # E2E в реальном браузере (Playwright; e2e-сборка выполняется автоматически)
+npm test             # Unit tests: Vitest + React Testing Library (180 tests)
+npm run compile      # Type checking without emitting files (tsc --noEmit)
+npm run build        # Production build must pass
+npm run build:edge   # Edge build
+npm run test:e2e     # Real-browser E2E (Playwright; E2E build runs automatically)
 ```
 
-E2E загружает собранное расширение в Chrome/Edge (headless, временный профиль),
-перехватывает страницы youtube.com и тестового домена локальным HTML, а ответ
-GitHub releases API подменяет тестовым релизом — интернет не нужен.
+E2E loads the built extension into Chrome/Edge with a temporary profile, serves local HTML for YouTube and the test domain, and replaces the GitHub Releases API response with a test release. No internet connection is required.
 
-Геометрия UI проверяется только в реальном браузере (`e2e/geometry.mjs`):
-каждый видимый интерактивный элемент и текстовый диапазон настроек/popup
-обязан оставаться внутри своего контейнера и content box окна по горизонтали,
-без отрицательных координат и горизонтального переполнения. jsdom не имеет
-layout, поэтому этих проверок нет в unit-тестах.
+UI geometry is checked in a real browser (`e2e/geometry.mjs`): every visible interactive element and text range in settings and the popup must remain within its container and the window content box, without negative coordinates or horizontal overflow. jsdom has no layout engine, so these checks are not part of the unit tests.
 
-## Структура проекта
+## Project structure
 
 ```
-core/            чистый домен: URL-matching, custom-сайты, лимиты, конфигурация, время
-adapters/        chrome.storage.local, optional permissions, динамическая регистрация скриптов
-components/      общий React-компонент настроек (встроен в popup и страницу options)
-entrypoints/     background (service worker), content script (overlay в Shadow DOM),
-                 popup (dashboard + настройки) и options (React + TypeScript)
-hooks/           React-хук доступа к данным расширения
-tests/           юнит-тесты и тесты компонентов
-e2e/             браузерный E2E (Playwright)
-docs/SPEC.md     спецификация
+core/            Pure domain logic: i18n, URL matching, custom sites, limits, config, time
+adapters/        chrome.storage.local, optional permissions, dynamic scripts, updates
+components/      Shared React settings and language switcher
+entrypoints/     Background service worker, Shadow DOM content overlay,
+                 popup (dashboard + settings), and options (React + TypeScript)
+hooks/           React hooks for extension data and updates
+tests/           Unit and component tests
+e2e/             Browser E2E tests (Playwright)
+docs/SPEC.md     Detailed specification
 ```
 
-## Ограничения
+## Limitations
 
-- Один тик учитывает не более 60 с активного времени — после долгого сна устройства
-  возможна недосчитанная минута (консервативно, в пользу пользователя).
-- При агрессивной приостановке service worker браузером точность учёта
-  поддерживается будильником и heartbeat content script, но действие блокировки
-  может наступить с задержкой до нескольких секунд (при лимите 0 — сразу
-  при классификации вкладки, не дожидаясь тика).
-- Лимиты — целые минуты, от 0 до 720 (сессия) и от 0 до 1440 (день).
-- Адрес custom-сайта должен использовать стандартный порт (80/443): произвольные
-  порты не выражаются в match-паттернах Chrome.
-- Нативный prompt optional permissions недоступен автоматическим кликам, поэтому
-  E2E покрывает путь «доступ предвыдан»; сценарии запроса/отказа покрыты
-  юнит-тестами адаптеров и компонентными тестами настроек.
-- При запросе доступа из popup нативный prompt закрывает окно popup: до показа
-  запроса конфигурация сохраняется черновиком (`dsb:pendingConfig`) и при
-  повторном открытии настроек либо достраивается автоматически (доступ выдан,
-  background также досохраняет по событию `permissions.onAdded`), либо форма
-  восстанавливается с пояснением — молчаливой потери введённых данных нет.
-  Любое более новое сохранение конфигурации инвалидирует черновик, чтобы
-  прерванное сохранение не перезаписало свежие изменения (например, toggle с
-  dashboard); повреждённый черновик очищается и никогда не применяется.
+- One tick accounts for at most 60 seconds of active time, so a long device sleep may leave up to a minute uncounted in the user's favor.
+- If the browser aggressively suspends the service worker, alarms and content-script heartbeats preserve accounting, but blocking may be delayed by a few seconds. A zero limit still acts during tab classification without waiting for a tick.
+- Limits are whole minutes: 0–720 for sessions and 0–1440 for days.
+- Custom-site addresses must use standard ports (80/443): arbitrary ports cannot be expressed in Chrome match patterns.
+- Native optional-permission prompts cannot be clicked by automation. E2E covers pre-granted access; request and denial paths are covered by adapter and component tests.
+- A native permission prompt closes the popup. Configuration is first saved as a draft (`dsb:pendingConfig`) and is completed automatically after access is granted or restored when settings reopen. Newer configuration saves invalidate stale drafts, and corrupted drafts are discarded without overwriting current data.

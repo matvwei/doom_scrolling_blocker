@@ -56,6 +56,7 @@ background переклассифицирует все вкладки с изв�
 ```ts
 interface ExtensionConfig {
   version: 2;
+  language: 'ru' | 'en';               // default: 'ru'; сохраняется и нормализуется
   youtubeScope: 'shorts' | 'all';      // default: 'shorts'
   services: Record<ServiceId, ServiceConfig>;   // youtube | instagram | tiktok
   customSites: CustomSiteConfig[];
@@ -209,6 +210,13 @@ interface CustomSiteConfig extends ServiceConfig {
     версия и ссылка «Обновить дополнение». Автоустановки ZIP с GitHub нет:
     для unpacked-расширения ссылка открывает релиз для ручного обновления.
     Ошибка сети/API не мешает основным функциям popup.
+  - Язык интерфейса: общий `LanguageSwitcher` в dashboard и настройках переключает
+    `config.language` между `ru` и `en`; выбор сохраняется сразу, не сохраняя
+    остальные несохранённые поля формы. Все системные строки popup/options,
+    валидация, причина блокировки, кнопки overlay и tamper-вопрос используют
+    `core/i18n.ts`. Background передаёт язык в `OverlayMessage`; пользовательские
+    сообщения и имена сайтов автоматически не переводятся. Старые конфиги без
+    поля нормализуются как `ru`, `getDefaultConfig('en')` даёт английские defaults.
   - Настройки: кнопка «Настройки» переключает view dashboard ↔ settings внутри
     самого popup (без `chrome.runtime.openOptionsPage` и без новой вкладки),
     кнопка «← Назад» возвращает на dashboard. Это тот же общий компонент
@@ -260,9 +268,9 @@ interface CustomSiteConfig extends ServiceConfig {
 ## 7. Хранилище и миграции
 
 - `dsb:config` — `ExtensionConfig` (version 2). Хранилище MVP (version 1: только
-  `services`) нормализуется без потерь: `youtubeScope='shorts'` (прежнее
-  поведение), `customSites=[]`; все поля сервисов сохраняются, повреждённые
-  значения — к дефолтам/границам.
+  `services`) и конфиги без `language` нормализуются без потерь:
+  `language='ru'`, `youtubeScope='shorts'`, `customSites=[]`; все поля сервисов
+  сохраняются, повреждённые значения — к локализованным дефолтам/границам.
 - `dsb:state` — `Record<targetId, ServiceState>`: встроенные сервисы и
   custom-сайты. Счётчики не привязаны к версии конфигурации и не теряются при
   миграции. Background при загрузке отбрасывает ключи состояния целей, которых
@@ -283,6 +291,7 @@ interface CustomSiteConfig extends ServiceConfig {
 
 ```
 core/             чистый домен, без API браузера (юнит-тестируется)
+  i18n.ts         словари ru/en, тип Language, переводы с интерполяцией
   services.ts     реестр сервисов, правила путей, подписи с учётом области YouTube
   customSites.ts  синтаксис адресов custom-правил, сопоставление, match-паттерны
   matching.ts     classifyUrl(url, config) -> TargetRef | null (custom раньше builtin)
@@ -303,6 +312,7 @@ adapters/
   scripting.ts    динамическая регистрация content script для custom-доменов,
                   reconcile после перезапуска, инъекция в уже открытые вкладки
 components/
+  LanguageSwitcher.tsx общий переключатель ru/en для popup и options
   SettingsApp.tsx общий UI настроек: полная страница options и компактный
                   view в popup (бизнес-логика не дублируется)
 entrypoints/

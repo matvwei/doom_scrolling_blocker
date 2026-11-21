@@ -1,6 +1,7 @@
 import { defineContentScript } from 'wxt/utils/define-content-script';
 import type { OverlayMessage } from '../core/messages';
 import { playWarningSound } from '../core/warningSound';
+import { translate } from '../core/i18n';
 
 const HOST_ID = 'dsb-overlay-host';
 
@@ -89,8 +90,9 @@ function sendTabState(): void {
 }
 
 function overlayHtml(payload: OverlayMessage): string {
-  const serviceLabel = escapeHtml(payload.serviceLabel ?? 'Сайт');
-  const reasonText = escapeHtml(payload.reasonText ?? 'Лимит времени исчерпан');
+  const language = payload.language ?? 'ru';
+  const serviceLabel = escapeHtml(payload.serviceLabel ?? translate(language, 'genericSite'));
+  const reasonText = escapeHtml(payload.reasonText ?? translate(language, 'timeLimitExceeded'));
   const message = escapeHtml(payload.message ?? '');
   const redirectUrl = payload.redirectUrl ? escapeHtml(payload.redirectUrl) : null;
 
@@ -101,15 +103,13 @@ function overlayHtml(payload: OverlayMessage): string {
         <div class="dsb-reason">${reasonText}</div>
         <div class="dsb-message">${message}</div>
         <div class="dsb-actions">
-          ${redirectUrl ? `<button class="dsb-button dsb-button--go" data-dsb-go="${redirectUrl}">Перейти</button>` : ''}
-          <button class="dsb-button dsb-button--close" data-dsb-close>Закрыть вкладку</button>
+          ${redirectUrl ? `<button class="dsb-button dsb-button--go" data-dsb-go="${redirectUrl}">${translate(language, 'go')}</button>` : ''}
+          <button class="dsb-button dsb-button--close" data-dsb-close>${translate(language, 'closeTab')}</button>
         </div>
       </div>
     </div>
   `;
 }
-
-const TAMPER_QUESTION = 'А точно ли ты хочешь продолжить дальше страдать фигней?';
 
 export class DoomscrollOverlay {
   private host: HTMLDivElement | null = null;
@@ -162,7 +162,7 @@ export class DoomscrollOverlay {
       this.host?.remove();
       this.host = null;
       this.show(this.payload);
-      window.confirm(TAMPER_QUESTION);
+      window.confirm(translate(this.payload.language ?? 'ru', 'tamperQuestion'));
     } finally {
       this.restoring = false;
     }
