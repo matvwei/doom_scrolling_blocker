@@ -33,6 +33,7 @@ export default defineConfig({
       '*://instagram.com/*',
       '*://www.tiktok.com/*',
       '*://tiktok.com/*',
+      'https://api.github.com/*',
       ...e2eOrigins,
     ],
     optional_host_permissions: ['http://*/*', 'https://*/*'],

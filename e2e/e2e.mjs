@@ -325,6 +325,26 @@ async function main() {
       blockedReason === 'session',
     );
 
+    let tamperDialogMessage = null;
+    const tamperDialogHandled = new Promise((resolve) => {
+      shortsPage.once('dialog', (dialog) => {
+        tamperDialogMessage = dialog.message();
+        void dialog.dismiss().then(resolve);
+      });
+    });
+    await overlayHost.evaluate((el) => el.remove());
+    await Promise.race([tamperDialogHandled, shortsPage.waitForTimeout(5000)]);
+    check(
+      'удаление overlay задаёт вопрос о продолжении',
+      tamperDialogMessage === 'А точно ли ты хочешь продолжить дальше страдать фигней?',
+    );
+    await overlayHost.waitFor({ state: 'attached', timeout: 5000 }).catch(() => {});
+    check('удалённый overlay восстановлен', (await overlayHost.count()) === 1);
+    check(
+      'восстановленный overlay снова содержит сообщение',
+      (await overlayTextOf(shortsPage)).includes(MESSAGE),
+    );
+
     const pagesBefore = context.pages().length;
     await closeButton.click();
     await shortsPage.waitForEvent('close', { timeout: 5000 }).catch(() => {});
@@ -376,7 +396,25 @@ async function main() {
     // Вьюпорт как у реального action-popup (конент 360px): проверяем,
     // что вёрстка держит узкое окно без горизонтального переполнения.
     await popupPage.setViewportSize({ width: 400, height: 600 });
+    await popupPage.route(
+      'https://api.github.com/repos/matvwei/doom_scrolling_blocker/releases/latest',
+      (route) => route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ tag_name: 'v0.4.0' }),
+      }),
+    );
     await popupPage.goto(`chrome-extension://${extensionId}/popup.html`);
+    await popupPage.getByText('Доступна версия 0.4.0').waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+    check('popup показывает текущую версию из manifest', await popupPage.getByText('v0.3.0').isVisible());
+    check(
+      'popup показывает доступную версию GitHub',
+      await popupPage.getByText('Доступна версия 0.4.0').isVisible(),
+    );
+    check(
+      'кнопка обновления ведёт к последнему релизу GitHub',
+      await popupPage.getByRole('link', { name: 'Обновить дополнение' }).getAttribute('href') ===
+        'https://github.com/matvwei/doom_scrolling_blocker/releases/latest',
+    );
     check('popup показывает TikTok', await popupPage.getByText('TikTok').isVisible());
     check('popup показывает Instagram Reels', await popupPage.getByText('Instagram Reels').isVisible());
     check(
@@ -1059,6 +1097,21 @@ async function main() {
     await geoOptions.setViewportSize({ width: 360, height: 600 });
     await checkGeometry(check, 'options: геометрия в узком окне 360px (одна колонка)', geoOptions);
     await geoOptions.close();
+
+    console.log('\nСценарий 24: перезагрузка заблокированной страницы заново показывает overlay');
+    await primeAndReload(baseConfig(), primedYoutubeState());
+    const reloadPage = await openFakePage('https://www.youtube.com/shorts/reload-blocked');
+    const reloadedOverlay = reloadPage.locator('#dsb-overlay-host');
+    await reloadedOverlay.waitFor({ state: 'attached', timeout: 10000 }).catch(() => {});
+    check('overlay показан перед перезагрузкой', (await reloadedOverlay.count()) === 1);
+    await reloadPage.reload();
+    await reloadedOverlay.waitFor({ state: 'attached', timeout: 10000 }).catch(() => {});
+    check('overlay появился после перезагрузки', (await reloadedOverlay.count()) === 1);
+    check(
+      'после перезагрузки сохранился текст предупреждения',
+      (await overlayTextOf(reloadPage)).includes(MESSAGE),
+    );
+    await reloadPage.close().catch(() => {});
   } finally {
     await context.close().catch(() => {});
   }

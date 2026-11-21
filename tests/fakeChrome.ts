@@ -6,6 +6,7 @@ export interface FakeChrome {
   data: Map<string, unknown>;
   emitStorageChanged: () => void;
   openOptionsPage: ReturnType<typeof vi.fn>;
+  requestUpdateCheck: ReturnType<typeof vi.fn>;
   permissions: {
     contains: ReturnType<typeof vi.fn>;
     request: ReturnType<typeof vi.fn>;
@@ -64,7 +65,9 @@ export function installFakeChrome(initial: Record<string, unknown> = {}): FakeCh
       },
     },
     runtime: {
+      getManifest: vi.fn(() => ({ name: 'Doomscroll Blocker', version: '0.3.0', manifest_version: 3 })),
       openOptionsPage: vi.fn(() => Promise.resolve()),
+      requestUpdateCheck: vi.fn(() => Promise.resolve({ status: 'no_update' })),
     },
     permissions: {
       contains: vi.fn(() => Promise.resolve(true)),
@@ -85,6 +88,11 @@ export function installFakeChrome(initial: Record<string, unknown> = {}): FakeCh
   };
 
   vi.stubGlobal('chrome', chrome);
+  vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({
+    ok: true,
+    status: 200,
+    json: () => Promise.resolve({ tag_name: 'v0.3.0' }),
+  })));
 
   return {
     data,
@@ -92,6 +100,7 @@ export function installFakeChrome(initial: Record<string, unknown> = {}): FakeCh
       for (const listener of listeners) listener({}, 'local');
     },
     openOptionsPage: chrome.runtime.openOptionsPage as ReturnType<typeof vi.fn>,
+    requestUpdateCheck: chrome.runtime.requestUpdateCheck as ReturnType<typeof vi.fn>,
     permissions: chrome.permissions,
     scripting: chrome.scripting,
     tabs: chrome.tabs,

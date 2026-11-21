@@ -58,6 +58,8 @@ function newTabInfo(windowId = -1): TabInfo {
 }
 
 export default defineBackground(() => {
+  chrome.runtime.onUpdateAvailable.addListener(() => chrome.runtime.reload());
+
   const tabs = new Map<number, TabInfo>();
   let config: ExtensionConfig = getDefaultConfig();
   let tracking: StoredState = {};
@@ -442,6 +444,8 @@ export default defineBackground(() => {
       if (changeInfo.status === 'loading') {
         info.hidden = false;
         info.docFocused = true;
+        info.overlayShown = false;
+        info.actionTaken = false;
       }
       if (changeInfo.url !== undefined) {
         info.url = changeInfo.url;

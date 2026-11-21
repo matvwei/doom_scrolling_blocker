@@ -299,4 +299,48 @@ describe('Popup', () => {
     expect(stored.services.youtube.sessionLimitMinutes).toBe(15);
     expect(stored.customSites).toHaveLength(0);
   });
+
+  it('показывает текущую версию из manifest без лишней кнопки обновления', async () => {
+    installFakeChrome();
+
+    render(<PopupApp />);
+
+    expect(await screen.findByText('v0.3.0')).toBeInTheDocument();
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    expect(screen.queryByRole('link', { name: 'Обновить дополнение' })).not.toBeInTheDocument();
+  });
+
+  it('показывает кнопку обновления, когда GitHub-релиз новее', async () => {
+    installFakeChrome();
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ tag_name: 'v0.4.0' }),
+    })));
+
+    render(<PopupApp />);
+
+    expect(await screen.findByText('Доступна версия 0.4.0')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Обновить дополнение' })).toHaveAttribute(
+      'href',
+      'https://github.com/matvwei/doom_scrolling_blocker/releases/latest',
+    );
+  });
+
+  it('не предлагает ручное обновление, если браузер уже устанавливает его', async () => {
+    const fake = installFakeChrome();
+    fake.requestUpdateCheck.mockResolvedValue({ status: 'update_available' });
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ tag_name: 'v0.4.0' }),
+    })));
+
+    render(<PopupApp />);
+
+    expect(
+      await screen.findByText('Обновление найдено. Браузер установит его автоматически.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Обновить дополнение' })).not.toBeInTheDocument();
+  });
 });

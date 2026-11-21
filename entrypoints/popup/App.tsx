@@ -3,7 +3,9 @@ import type { ExtensionConfig } from '../../core/config';
 import { emptyServiceState, remainingTime, type ServiceState } from '../../core/limits';
 import { builtinLabel, SERVICE_IDS } from '../../core/services';
 import { formatClock } from '../../core/time';
+import { GITHUB_RELEASES_URL } from '../../core/updates';
 import { useExtensionData } from '../../hooks/useExtensionData';
+import { useUpdates } from '../../hooks/useUpdates';
 import SettingsApp from '../../components/SettingsApp';
 
 function toggleService(config: ExtensionConfig, serviceId: (typeof SERVICE_IDS)[number]): ExtensionConfig {
@@ -34,6 +36,7 @@ function targetStats(
 
 export default function App() {
   const { config, state, saveConfig } = useExtensionData();
+  const updates = useUpdates();
   // Настройки открываются внутри popup (view), без отдельной страницы/вкладки.
   // Полная страница options остаётся fallback через chrome://extensions.
   const [view, setView] = useState<'dashboard' | 'settings'>('dashboard');
@@ -55,7 +58,10 @@ export default function App() {
   return (
     <div className="popup">
       <header className="popup__header">
-        <h1 className="popup__title">Doomscroll Blocker</h1>
+        <div className="popup__heading">
+          <h1 className="popup__title">Doomscroll Blocker</h1>
+          <span className="popup__version">v{updates.currentVersion}</span>
+        </div>
         <button
           type="button"
           className="popup__settings"
@@ -64,6 +70,30 @@ export default function App() {
           Настройки
         </button>
       </header>
+
+      {!updates.checking && updates.updateAvailable && (
+        <section className="update" aria-label="Обновление расширения">
+          {updates.automaticUpdate ? (
+            <span>Обновление найдено. Браузер установит его автоматически.</span>
+          ) : (
+            <>
+              <span>
+                {updates.latestVersion
+                  ? `Доступна версия ${updates.latestVersion}`
+                  : 'Доступно обновление'}
+              </span>
+              <a
+                className="update__button"
+                href={GITHUB_RELEASES_URL}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Обновить дополнение
+              </a>
+            </>
+          )}
+        </section>
+      )}
 
       <ul className="services">
         {SERVICE_IDS.map((serviceId) => {

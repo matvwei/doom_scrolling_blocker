@@ -1,5 +1,6 @@
 import { defineContentScript } from 'wxt/utils/define-content-script';
 import type { OverlayMessage } from '../core/messages';
+import { playWarningSound } from '../core/warningSound';
 
 const HOST_ID = 'dsb-overlay-host';
 
@@ -108,8 +109,13 @@ function overlayHtml(payload: OverlayMessage): string {
   `;
 }
 
-class DoomscrollOverlay {
+const TAMPER_QUESTION = 'А точно ли ты хочешь продолжить дальше страдать фигней?';
+
+export class DoomscrollOverlay {
   private host: HTMLDivElement | null = null;
+  private payload: OverlayMessage | null = null;
+  private tamperObserver: MutationObserver | null = null;
+  private restoring = false;
 
   private ensureHost(): HTMLDivElement {
     if (this.host && this.host.isConnected) return this.host;
@@ -122,7 +128,50 @@ class DoomscrollOverlay {
     return this.host;
   }
 
+  private observeTampering(host: HTMLDivElement, shadow: ShadowRoot): void {
+    const observer = new MutationObserver((records) => {
+      const tampered = records.some((record) => {
+        if (record.target === host || record.target === shadow || shadow.contains(record.target)) {
+          return true;
+        }
+        return (
+          record.target === document.documentElement &&
+          Array.from(record.removedNodes).includes(host)
+        );
+      });
+      if (tampered && this.tamperObserver === observer && this.host === host) {
+        this.restoreAfterTamper();
+      }
+    });
+    observer.observe(document.documentElement, { childList: true });
+    observer.observe(host, { attributes: true });
+    observer.observe(shadow, {
+      attributes: true,
+      characterData: true,
+      childList: true,
+      subtree: true,
+    });
+    this.tamperObserver = observer;
+  }
+
+  private restoreAfterTamper(): void {
+    if (this.restoring || !this.payload) return;
+    this.restoring = true;
+    try {
+      this.tamperObserver?.disconnect();
+      this.host?.remove();
+      this.host = null;
+      this.show(this.payload);
+      window.confirm(TAMPER_QUESTION);
+    } finally {
+      this.restoring = false;
+    }
+  }
+
   show(payload: OverlayMessage): void {
+    this.payload = payload;
+    this.tamperObserver?.disconnect();
+    const wasVisible = this.host?.isConnected === true;
     const host = this.ensureHost();
     // Shadow DOM изолирует стили от стилей сайта и наоборот.
     const shadow = host.shadowRoot ?? host.attachShadow({ mode: 'open' });
@@ -135,9 +184,15 @@ class DoomscrollOverlay {
       const url = (event.currentTarget as HTMLElement).getAttribute('data-dsb-go');
       if (url) window.location.assign(url);
     });
+
+    this.observeTampering(host, shadow);
+    if (!wasVisible) playWarningSound();
   }
 
   hide(): void {
+    this.payload = null;
+    this.tamperObserver?.disconnect();
+    this.tamperObserver = null;
     this.host?.remove();
     this.host = null;
   }

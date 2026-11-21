@@ -1,7 +1,9 @@
 # Спецификация: Doomscroll Blocker
 
 Браузерное расширение (Manifest V3, Chrome и Edge) против doomscrolling.
-Без backend, без отправки данных наружу: всё хранится в `chrome.storage.local`.
+Без собственного backend: конфигурация и статистика хранятся в
+`chrome.storage.local`. Единственный внешний запрос — проверка последнего релиза
+через публичный GitHub API при открытии popup; пользовательские данные не отправляются.
 
 ## 1. Отслеживаемые цели
 
@@ -166,12 +168,23 @@ interface CustomSiteConfig extends ServiceConfig {
 - `redirect` — текущая вкладка переходит на `redirectUrl`.
 - `warning` — полноэкранный блокирующий overlay (Shadow DOM): имя цели, причина
   (`session`/`daily` с лимитом), пользовательский текст, кнопка «Закрыть
-  вкладку» и кнопка «Перейти», только если `redirectUrl` настроен. Overlay
-  нельзя закрыть для продолжения просмотра; дубликатов нет.
+  вкладку» и кнопка «Перейти», только если `redirectUrl` настроен. При появлении
+  проигрывается короткий двухтональный сигнал через Web Audio API (без аудиофайла
+  и дополнительных разрешений); повторные сообщения для уже видимого overlay не
+  перезапускают звук. Если браузер запрещает автовоспроизведение, overlay всё
+  равно работает. Overlay нельзя закрыть для продолжения просмотра; дубликатов нет.
+  `MutationObserver` следит за удалением host-элемента и изменениями его атрибутов
+  или Shadow DOM: при вмешательстве overlay пересоздаётся с последним payload и
+  показывает вопрос «А точно ли ты хочешь продолжить дальше страдать фигней?».
+  Ответ на вопрос ограничение не снимает. Штатные `show`/`hide` observer'ом
+  отключают наблюдение на время изменения DOM и не считаются вмешательством.
 - **Мультитаб:** пока `blockedReason` цели активен, блокировка применяется к
   *каждой* отслеживаемой вкладке цели — при появлении вкладки, активации,
   навигации (включая SPA). Warning идемпотентен, close/redirect применяются к
   вкладке однократно, но каждая новая вкладка цели обрабатывается заново.
+  Полная перезагрузка уничтожает прежний DOM: на событии `loading` per-tab флаги
+  `overlayShown`/`actionTaken` сбрасываются, и блокировка применяется к новому
+  документу заново независимо от того, изменился ли URL.
 - **Снятие блокировки с вкладки:** при переходе цели в unblocked (рост лимита,
   сброс сессии/дня, отключение, удаление custom-сайта) overlay скрывается
   гарантированно и независимо от per-tab флагов; при SPA-уходе на
@@ -187,6 +200,15 @@ interface CustomSiteConfig extends ServiceConfig {
     custom-сайты: переключатель `enabled`, оставшееся session/daily время,
     бейдж «Лимит исчерпан». Список прокручивается при большом числе сайтов.
     Обновляется по событию `storage.onChanged` и раз в секунду.
+  - Версия и обновления: шапка показывает `chrome.runtime.getManifest().version`.
+    При открытии popup параллельно вызываются `runtime.requestUpdateCheck()` и
+    GitHub API `repos/matvwei/doom_scrolling_blocker/releases/latest`. Тег `vX.Y.Z`
+    сравнивается с установленной версией численно. `update_available` означает,
+    что браузер установит обновление; `onUpdateAvailable` в background вызывает
+    `runtime.reload()`. Иначе при более новом GitHub-релизе показываются его
+    версия и ссылка «Обновить дополнение». Автоустановки ZIP с GitHub нет:
+    для unpacked-расширения ссылка открывает релиз для ручного обновления.
+    Ошибка сети/API не мешает основным функциям popup.
   - Настройки: кнопка «Настройки» переключает view dashboard ↔ settings внутри
     самого popup (без `chrome.runtime.openOptionsPage` и без новой вкладки),
     кнопка «← Назад» возвращает на dashboard. Это тот же общий компонент
@@ -268,7 +290,10 @@ core/             чистый домен, без API браузера (юнит
   limits.ts       ServiceState, tickServiceState, getExceeded, rehydrate, remaining
   time.ts         localDayKey, formatClock
   messages.ts     контракты сообщений content <-> background
+  warningSound.ts короткий двухтональный сигнал предупреждения через Web Audio API
+  updates.ts      GitHub releases API, сравнение версий и постоянный URL релиза
 adapters/
+  updates.ts      текущая версия manifest и штатный runtime.requestUpdateCheck
   storage.ts      chrome.storage.local: конфиг и состояние, fallback к дефолтам,
                   черновик прерванного сохранения (dsb:pendingConfig), его
                   инвалидация при любом сохранении config
@@ -287,7 +312,8 @@ entrypoints/
   content.ts      heartbeat видимости, overlay в Shadow DOM (единый для всех доменов)
   popup/          React UI: dashboard + встроенные настройки (view-переключение)
   options/        React UI: та же страница настроек как fallback
-hooks/            useExtensionData — данные из storage для React
+hooks/            useExtensionData — данные из storage для React;
+                  useUpdates — проверка браузерного обновления и GitHub-релиза
 ```
 
 Бизнес-логика находится в `core/`, компоненты React только отображают данные и
@@ -298,7 +324,8 @@ hooks/            useExtensionData — данные из storage для React
 
 - permissions: `storage`, `alarms`, `scripting` (последний — динамическая
   регистрация content script для custom-доменов и запасная инъекция overlay).
-- host_permissions: только `youtube.com`, `instagram.com`, `tiktok.com` (www/m).
+- host_permissions: `youtube.com`, `instagram.com`, `tiktok.com` (www/m) и
+  `https://api.github.com/*` только для проверки последнего релиза.
 - optional_host_permissions: `http://*/*`, `https://*/*` — выдаются точечно под
   каждый custom-сайт через `chrome.permissions.request`.
 - Background — service worker, popup и options подключены штатно. Единый content
@@ -313,15 +340,20 @@ hooks/            useExtensionData — данные из storage для React
   0, normalize/миграции MVP, повреждённые custom-сайты), лимиты (включая
   нулевые: немедленное превышение, зачёлка, приоритет session), storage
   (миграции состояния, pruning удалённых сайков), permissions/scripting
-  (request/отказ/duplicate/unregister/inject), React-компоненты настроек
+  (request/отказ/duplicate/unregister/inject), сравнение версий и ответы GitHub
+  releases API, React-компоненты настроек
   (add/remove/zero/область YouTube/отказ в разрешении/восстановление
   прерванного сохранения) и popup (custom-список, view настроек внутри popup:
-  открытие/возврат, add/save custom-сайта, отказ в разрешении с черновиком).
+  открытие/возврат, add/save custom-сайта, отказ в разрешении с черновиком,
+  текущая версия, ручная и автоматическая ветки обновления).
 - E2E: `npm run test:e2e` (Playwright, реальный браузер; e2e-сборка с
   предвыданным тестовым origin `https://*.doomscroll-e2e.test/*` выполняется
   автоматически). Страницы youtube.com и doomscroll-e2e.test перехватываются
-  роутером Playwright и отдают локальный HTML, сеть не нужна. Покрывает:
-  overlay и содержимое, закрытие вкладки кнопкой, незатрагиваемость обычного
+  роутером Playwright и отдают локальный HTML, GitHub API возвращает тестовый
+  релиз, сеть не нужна. Покрывает:
+  overlay и содержимое, восстановление после удаления через DOM с вопросом,
+  повторный показ после полной перезагрузки заблокированной страницы,
+  закрытие вкладки кнопкой, незатрагиваемость обычного
   YouTube, close/redirect и защиту от redirect-цикла, сохранение настроек,
   **popup: настройки внутри popup без новой вкладки/страницы, layout формы
   добавления (одна колонка с общими границами, scrollWidth <= clientWidth,
