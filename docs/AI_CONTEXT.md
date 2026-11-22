@@ -7,7 +7,7 @@ This file is a practical snapshot for AI agents. Mandatory workflow rules are in
 - Product: Doomscroll Blocker, Manifest V3 for Chrome and Edge.
 - Repository: `https://github.com/matvwei/doom_scrolling_blocker.git`.
 - Main branch: `main`; remote: `origin`.
-- Current application version: **0.4.1**.
+- Current application version: **0.5.0**.
 - Runtime dependencies: React 18 and React DOM 18.
 - Toolchain: WXT 0.21, TypeScript 5.9, Vite through WXT, Vitest 3, React Testing Library, Playwright.
 - No backend. Configuration and usage are local; the only external request is the public GitHub latest-release check from the popup.
@@ -78,11 +78,12 @@ This file is a practical snapshot for AI agents. Mandatory workflow rules are in
 
 ## Test snapshot
 
-At version 0.4.1 the previous verified baseline is:
+At version 0.5.0 the verified baseline is:
 
-- **180 unit/component tests** across 12 test files.
+- **181 unit/component tests** across 12 test files.
 - **126 E2E assertions** across 25 scenarios.
 - TypeScript, Chrome production build, and Edge production build.
+- `.github/workflows/ci.yml` runs `npm ci`, installs Playwright Chromium with Linux dependencies on the ephemeral GitHub Actions runner, then runs headed browser E2E via Xvfb alongside unit tests, type-check, Chrome/Edge builds, and E2E. Chromium is test-only and never enters extension output; this repository has no Docker build/test configuration.
 
 Update these numbers only after a successful run. E2E uses a temporary browser profile and local/mocked network responses. It covers blocking, multi-tab behavior, reload, SPA transitions, redirect/close, custom-site registration, pending drafts, UI geometry, updates, language switching, and the English overlay.
 
@@ -106,12 +107,13 @@ Cover grant/denial, already-open tabs, registration reconciliation after restart
 
 ### Release/version
 
-Use `npm version <version> --no-git-tag-version`. Update fake manifest versions and use a newer mock GitHub release. Build to verify the manifest. Commit and push are mandatory per `AGENTS.md`; tags/releases require an explicit user request.
+Use SemVer and add a `CHANGELOG.md` entry for every logical change, including documentation-only changes: MAJOR for incompatible behavior/API/configuration/storage (document migration), MINOR for backward-compatible functionality including CI automation, PATCH for fixes/docs/instructions/refactoring without API change. Keep package files and changelog aligned; use `npm version <version> --no-git-tag-version`. Update fake manifest versions and use a newer mock GitHub release when testing update availability. The popup checks the browser update service independently from GitHub Releases; if no GitHub latest release is published (for example, API 404), it quietly shows no GitHub version/link and core functionality remains available. A version bump, commit, and push do not publish a GitHub Release or create the `releases/latest` API endpoint. Build to verify the manifest. Commit and push are mandatory per `AGENTS.md`; tags/releases require an explicit user request.
 
 ## Documentation map
 
 - `AGENTS.md`: mandatory instructions, invariants, verification, versioning, commit/push policy.
 - `.github/copilot-instructions.md`: short Copilot-specific entry point.
+- `.github/workflows/ci.yml`: automated test/build pipeline; `.github/AGENTS.md` owns workflow rules.
 - `docs/SPEC.md`: detailed behavioral specification in Russian.
 - `docs/AI_CONTEXT.md`: this practical architecture/task snapshot.
 - `README.md`: primary user documentation in English.

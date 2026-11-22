@@ -212,8 +212,13 @@ interface CustomSiteConfig extends ServiceConfig {
     сравнивается с установленной версией численно. `update_available` означает,
     что браузер установит обновление; `onUpdateAvailable` в background вызывает
     `runtime.reload()`. Иначе при более новом GitHub-релизе показываются его
-    версия и ссылка «Обновить дополнение». Автоустановки ZIP с GitHub нет:
-    для unpacked-расширения ссылка открывает релиз для ручного обновления.
+    версия и ссылка «Обновить дополнение». Если GitHub Releases API отвечает
+    404 (релиз ещё не опубликован) или недоступен, GitHub-проверка считается
+    отсутствующей: текущая версия остаётся видимой, ложная ссылка не появляется,
+    а штатная browser-проверка и остальные функции продолжают работать. Bump,
+    commit и push не создают endpoint `releases/latest`; нужен опубликованный
+    GitHub Release. Автоустановки ZIP с GitHub нет: для unpacked-расширения
+    ссылка открывает опубликованный релиз для ручного обновления.
     Ошибка сети/API не мешает основным функциям popup.
   - Язык интерфейса: общий `LanguageSwitcher` в dashboard и настройках переключает
     `config.language` между `ru` и `en`; выбор сохраняется сразу, не сохраняя
@@ -361,8 +366,8 @@ hooks/            useExtensionData — данные из storage для React;
   (add/remove/zero/область YouTube/отказ в разрешении/восстановление
   прерванного сохранения, английские ошибки) и popup (custom-список, view
   настроек внутри popup, add/save, черновик, версия, обновления, переключение
-  и сохранение языка). Базовый подтверждённый объём — **180 тестов в 12 файлах**.
-- E2E: `npm run test:e2e` (Playwright, реальный браузер; e2e-сборка с
+  и сохранение языка). Подтверждённый объём на версии 0.5.0 — **181 тест в 12 файлах**.
+- E2E: `xvfb-run -a npm run test:e2e` (Playwright, реальный браузер; e2e-сборка с
   предвыданным тестовым origin `https://*.doomscroll-e2e.test/*` выполняется
   автоматически). Страницы youtube.com и doomscroll-e2e.test перехватываются
   роутером Playwright и отдают локальный HTML, GitHub API возвращает тестовый
@@ -392,6 +397,16 @@ hooks/            useExtensionData — данные из storage для React;
   базовый объём — **126 проверок в 25 сценариях**.
   Нативный prompt разрешений Chrome недоступен автотесту — пути request/отказ
   покрыты юнит/компонентными тестами адаптеров и настроек.
+- `.github/workflows/ci.yml` автоматически выполняет `npm ci`, устанавливает
+  Playwright Chromium с системными Linux-зависимостями через
+  `npx playwright install --with-deps chromium` и запускает unit, compile,
+  Chrome/Edge build и E2E через `xvfb-run` на push в `main` и pull request. Chromium и системные
+  библиотеки существуют только на эфемерном runner; они не входят в npm
+  production dependencies, `.output/` или ZIP расширения. Локально для E2E
+  достаточно `npx playwright install chromium` (Linux deps — только если
+  отсутствуют). Dockerfile/compose для CI не добавлялись: репозиторий не имеет
+  Docker test/build конфигурации, изолированный GitHub-hosted runner покрывает
+  задачу без добавления второго окружения.
 
 ## 11. Правила разработки и работы ИИ
 
@@ -403,13 +418,20 @@ hooks/            useExtensionData — данные из storage для React;
 - Любое логическое изменение проходит цикл: реализация → миграции/локализация →
   тесты/документация → повышение SemVer → проверки → осознанный Conventional
   Commit → `git push origin main` → чистое рабочее дерево.
-- Версия повышается даже для docs-only изменений. `npm version <версия>
-  --no-git-tag-version` обновляет package manifest и lockfile; WXT переносит
-  версию в расширение при сборке. Теги и публичные GitHub Releases создаются
-  только по явному запросу, обычный push релизом не является.
+- Версия повышается даже для docs-only изменений; каждый логический change
+  получает подробную запись в `CHANGELOG.md`. Используй SemVer: MAJOR для
+  несовместимого поведения/API/конфигурации/хранения (с миграцией), MINOR для
+  обратно совместимой функциональности, включая автоматизацию CI; PATCH для исправлений, документации,
+  инструкций и рефакторинга без смены API. Сверяй changelog и package-файлы.
+  `npm version <версия> --no-git-tag-version` обновляет package manifest и
+  lockfile; WXT переносит версию в расширение при сборке. Commit/push и bump
+  сами по себе не создают GitHub Release или `releases/latest`: endpoint
+  появляется только при фактической публикации релиза. Теги и публичные
+  GitHub Releases создаются только по явному запросу.
 - Для кода обязательны `npm test`, `npm run compile`, `npm run build`,
-  `npm run build:edge`, `npm run test:e2e`. Нельзя объявлять задачу завершённой
-  при красных проверках или неудачном push.
+  `npm run build:edge`, `xvfb-run -a npm run test:e2e`. GitHub Actions повторяет весь набор
+  и устанавливает Playwright Chromium только на CI runner. Нельзя объявлять
+  задачу завершённой при красных проверках или неудачном push.
 - Доменная логика остаётся в `core`, Chrome API — в `adapters`, оркестрация — в
   background, React-компоненты не дублируют бизнес-логику. Генерируемые
   `.output/`, `.e2e-output/`, `.wxt/` и `node_modules/` вручную не редактируются.

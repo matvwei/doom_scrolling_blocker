@@ -305,9 +305,26 @@ describe('Popup', () => {
 
     render(<PopupApp />);
 
-    expect(await screen.findByText('v0.4.1')).toBeInTheDocument();
+    expect(await screen.findByText('v0.5.0')).toBeInTheDocument();
     await waitFor(() => expect(fetch).toHaveBeenCalled());
     expect(screen.queryByRole('link', { name: 'Обновить дополнение' })).not.toBeInTheDocument();
+  });
+
+  it('без опубликованного GitHub-релиза сохраняет popup без ложного предложения обновиться', async () => {
+    const fake = installFakeChrome();
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: false,
+      status: 404,
+      json: async () => ({ message: 'Not Found' }),
+    })));
+
+    render(<PopupApp />);
+
+    expect(await screen.findByText('v0.5.0')).toBeInTheDocument();
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    expect(screen.queryByRole('link', { name: 'Обновить дополнение' })).not.toBeInTheDocument();
+    expect(fake.requestUpdateCheck).toHaveBeenCalled();
+    expect(screen.getByRole('heading', { name: 'Doomscroll Blocker' })).toBeInTheDocument();
   });
 
   it('показывает кнопку обновления, когда GitHub-релиз новее', async () => {
@@ -315,12 +332,12 @@ describe('Popup', () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({
       ok: true,
       status: 200,
-      json: async () => ({ tag_name: 'v0.5.0' }),
+      json: async () => ({ tag_name: 'v0.5.1' }),
     })));
 
     render(<PopupApp />);
 
-    expect(await screen.findByText('Доступна версия 0.5.0')).toBeInTheDocument();
+    expect(await screen.findByText('Доступна версия 0.5.1')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Обновить дополнение' })).toHaveAttribute(
       'href',
       'https://github.com/matvwei/doom_scrolling_blocker/releases/latest',
@@ -333,7 +350,7 @@ describe('Popup', () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({
       ok: true,
       status: 200,
-      json: async () => ({ tag_name: 'v0.5.0' }),
+      json: async () => ({ tag_name: 'v0.5.1' }),
     })));
 
     render(<PopupApp />);

@@ -13,7 +13,7 @@ There is no custom backend: configuration and statistics are stored in `chrome.s
 - **Instagram Reels** — the `/` feed, `/reels/*`, and `/reel/*`; profiles, posts, and messages are unaffected.
 - **TikTok** — the entire site.
 - **Custom sites** — add rules through the settings UI without JSON: `https://example.com` blocks the domain and its subdomains, while `https://example.com/section` blocks one section. Each site has independent counters and settings.
-- **Version and updates** — the popup shows the current manifest version, requests a browser update through `chrome.runtime.requestUpdateCheck()`, and compares the version with the latest GitHub release. If the browser cannot install it automatically, an **Update extension** button links to the release. ZIP files from GitHub are not installed programmatically: developer-mode installations require a manual update.
+- **Version and updates** — the popup shows the current manifest version, requests a browser update through `chrome.runtime.requestUpdateCheck()`, and compares the version with the latest published GitHub Release. If no GitHub Release exists yet (the latest-release API returns 404), the GitHub check is simply unavailable; this does not affect the browser's independent update check or other features. If the browser cannot install an available update automatically, an **Update extension** button links to the published release. Bumping the app version and pushing code does not itself publish a GitHub Release. ZIP files from GitHub are not installed programmatically: developer-mode installations require a manual update.
 - **Immediate limits** — 0 minutes means “block immediately”: the action runs when a tracked page first opens.
 - Only active time is counted: the tab is active, its window is focused, and the document is visible.
 - Two independent limits per target: session (reset after 10 minutes of inactivity) and day (reset at local midnight).
@@ -36,13 +36,22 @@ For AI agents and contributors: [AGENTS.md](AGENTS.md) contains mandatory workfl
 ## Requirements
 
 - Node.js ≥ 22 and npm
-- Chrome or Edge for E2E tests (Playwright uses an installed browser or its bundled Chromium)
+- Playwright Chromium for local E2E (`npx playwright install chromium`); CI installs it automatically
 
 ## Install dependencies
 
 ```bash
-npm install
+npm ci
 ```
+
+For local browser E2E, install the test browser separately; on Linux use `xvfb-run -a npm run test:e2e` for its headed browser:
+
+```bash
+npx playwright install chromium
+# Linux only, if required: npx playwright install --with-deps chromium
+```
+
+The browser and Linux libraries are test-environment assets; they are not included in extension output or archives.
 
 ## Development
 
@@ -77,14 +86,14 @@ After installation, configure services directly from the popup. **Settings** swi
 ## Tests
 
 ```bash
-npm test             # Unit tests: Vitest + React Testing Library (180 tests)
+npm test             # Unit tests: Vitest + React Testing Library (181 tests)
 npm run compile      # Type checking without emitting files (tsc --noEmit)
 npm run build        # Production build must pass
 npm run build:edge   # Edge build
-npm run test:e2e     # Real-browser E2E (Playwright; E2E build runs automatically)
+xvfb-run -a npm run test:e2e  # Real-browser E2E (Playwright; E2E build runs automatically)
 ```
 
-E2E loads the built extension into Chrome/Edge with a temporary profile, serves local HTML for YouTube and the test domain, and replaces the GitHub Releases API response with a test release. No internet connection is required.
+E2E loads the built extension into Chrome/Edge with a temporary profile, serves local HTML for YouTube and the test domain, and replaces the GitHub Releases API response with a test release. No internet connection is required after dependencies and Chromium are installed. GitHub Actions runs the full test/build suite on pushes to `main` and pull requests, installing Chromium with `npx playwright install --with-deps chromium` on its ephemeral runner. Playwright browser files never enter the extension build or ZIP. This project uses GitHub-hosted runners rather than a Docker test image; no Docker build/test configuration is needed.
 
 UI geometry is checked in a real browser (`e2e/geometry.mjs`): every visible interactive element and text range in settings and the popup must remain within its container and the window content box, without negative coordinates or horizontal overflow. jsdom has no layout engine, so these checks are not part of the unit tests.
 

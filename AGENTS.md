@@ -30,11 +30,14 @@
 
 ## 3. Версионирование и Git
 
-Версия обязательна после **каждого** изменения, включая документацию:
+Версия обязательна после **каждого** логического изменения, включая документацию; каждое изменение также получает запись в `CHANGELOG.md`:
 
-- новая функциональность, обратно совместимая — minor (`0.4.0` → `0.5.0`);
-- исправление, документация, инструкции, рефакторинг без смены API — patch (`0.4.0` → `0.4.1`);
-- несовместимое изменение — major; заранее явно опиши миграцию.
+- SemVer `MAJOR.MINOR.PATCH`: обратно совместимая функциональность — minor; исправления, документация, инструкции и рефакторинг без смены API — patch;
+- несовместимое изменение поведения, конфигурации, хранения или интерфейса — major; до выпуска явно опиши breaking change и инструкции миграции;
+- новая обратно совместимая функциональность, включая автоматизацию CI, — minor;
+- в changelog добавляй описание изменений под подготавливаемой версией, не оставляй версию без записи.
+
+Сверяй текущую версию с changelog и package-файлами; веди подробные записи в `CHANGELOG.md`.
 
 Используй:
 
@@ -59,6 +62,7 @@ npm version <new-version> --no-git-tag-version
 - `entrypoints/content.ts` — heartbeat, SPA-сигналы, Shadow DOM overlay, звук и защита overlay от DOM-вмешательства.
 - `components/`, `entrypoints/popup/`, `entrypoints/options/`, `hooks/` — React UI и доступ к данным через адаптеры; не дублируй бизнес-логику.
 - `tests/` — Vitest + React Testing Library; `e2e/` — Playwright с реальным браузером и локальными/mocked ответами.
+- `.github/workflows/ci.yml` запускает обязательные проверки на push в `main` и pull request; Playwright Chromium устанавливается только в изолированную CI-среду, вне production extension и артефактов расширения.
 
 ## 5. Инварианты, которые нельзя нарушать
 
@@ -128,8 +132,10 @@ npm test
 npm run compile
 npm run build
 npm run build:edge
-npm run test:e2e
+xvfb-run -a npm run test:e2e
 ```
+
+GitHub Actions выполняет эти проверки на `main` и pull request. Для локального E2E установи только тестовый браузер командой `npx playwright install chromium` (на Linux при необходимости — `npx playwright install --with-deps chromium`). На Linux headed E2E запускается через `xvfb-run -a npm run test:e2e` (GitHub Actions делает так же). Chromium и системные библиотеки остаются в тестовой среде и не включаются в extension build/ZIP. Не добавляй Docker только ради CI: используемый workflow работает на изолированном GitHub-hosted runner.
 
 Можно начать с focused tests, но финальный прогон должен быть полным. Для изменений только документации допустимы проверка ссылок/диффов, `npm run compile`, `npm run build`, `npm run build:edge`; полный unit/E2E запускай, если затронуты ожидаемые версии, fixtures или тестовые сценарии.
 

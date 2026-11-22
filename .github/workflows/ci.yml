@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify extension
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Browser binaries and OS libraries stay on the ephemeral CI runner;
+      # they are not npm production dependencies or part of the extension output.
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run unit and component tests
+        run: npm test
+
+      - name: Type-check
+        run: npm run compile
+
+      - name: Build Chrome extension
+        run: npm run build
+
+      - name: Build Edge extension
+        run: npm run build:edge
+
+      - name: Run browser E2E tests
+        run: xvfb-run -a npm run test:e2e
