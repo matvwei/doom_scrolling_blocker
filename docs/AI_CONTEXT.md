@@ -7,7 +7,7 @@ This file is a practical snapshot for AI agents. Mandatory workflow rules are in
 - Product: Doomscroll Blocker, Manifest V3 for Chrome and Edge.
 - Repository: `https://github.com/matvwei/doom_scrolling_blocker.git`.
 - Main branch: `main`; remote: `origin`.
-- Current application version: **0.6.0**.
+- Current application version: **0.6.1**.
 - Runtime dependencies: React 18 and React DOM 18.
 - Toolchain: WXT 0.21, TypeScript 5.9, Vite through WXT, Vitest 3, React Testing Library, Playwright.
 - No backend. Configuration and usage are local; the only external request is the public GitHub latest-release check from the popup.
@@ -108,6 +108,10 @@ Cover grant/denial, already-open tabs, registration reconciliation after restart
 ### Release/version
 
 Use SemVer and add a `CHANGELOG.md` entry for every logical change, including documentation-only changes: MAJOR for incompatible behavior/API/configuration/storage (document migration), MINOR for backward-compatible functionality including CI automation, PATCH for fixes/docs/instructions/refactoring without API change. Keep package files and changelog aligned; use `npm version <version> --no-git-tag-version`. Update fake manifest versions and use a newer mock GitHub release when testing update availability. The popup checks the browser update service independently from GitHub Releases; if no GitHub latest release is published (for example, API 404), it quietly shows no GitHub version/link and core functionality remains available. A successful push to `main` publishes a GitHub Release after verify succeeds, tagged `v<version>` with generated notes; pull requests never publish. The workflow requires stable SemVer, a matching changelog heading, and an unused remote tag. It grants `contents: write` only to the release job and serializes release runs. A push without a version bump is rejected because the tag is already used. Build to verify the manifest. Commit and push are mandatory per `AGENTS.md`; a push that triggers publication requires explicit approval; never create the tag/release manually.
+
+## Safe-main roadmap
+
+Local checks → PR → all required verify checks pass → review/approval → merge → verify post-merge checks and expected release. GitHub Actions runs on PRs but cannot itself enforce branch protection. Repository admins must activate and verify a `main` ruleset/branch protection requiring PRs and all verify checks, blocking routine direct pushes, force-push and deletion, with bypass disabled except an explicitly approved and documented emergency process. The release job remains gated to successful verification on push to `main`; PRs never publish. Flaky, environment, or post-merge failures remain possible: investigate and fix through PR, or use a reviewed revert/hotfix with a new version and changelog when appropriate.
 
 ## Documentation map
 

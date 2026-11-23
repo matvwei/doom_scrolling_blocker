@@ -151,3 +151,11 @@ E2E должен оставаться автономным: YouTube/custom hosts
 - **Новое действие блокировки:** тип + validation + background + content/message contract + multi-tab/reload + RU/EN + unit/E2E.
 - **Изменение версии/update flow:** `core/updates.ts`, `adapters/updates.ts`, `hooks/useUpdates.ts`, popup, fake Chrome и E2E mock; GitHub ZIP нельзя представлять как автоустановку.
 - **Изменение правил для ИИ:** синхронно проверить `AGENTS.md`, `.github/copilot-instructions.md`, `docs/AI_CONTEXT.md` и §11 SPEC.
+
+## 10. Безопасный путь в main и roadmap
+
+- Обычный путь любого изменения: локальные проверки → pull request в `main` → обязательные GitHub Actions checks успешно завершились → review/approval по правилам репозитория → merge → проверить post-merge CI и ожидаемый GitHub Release.
+- Прямые push в `main` должны быть запрещены GitHub ruleset/branch protection. Административный bypass отключить; исключение — только явная аварийная процедура с документированным обоснованием и последующим PR/проверками. Агент не выполняет push/release без отдельного явного согласования.
+- В настройках GitHub репозитория вручную включить защиту `main`: требовать PR для изменений, выбрать все обязательные status checks из verify job (unit tests, type-check, Chrome/Edge builds, E2E; требуемый aggregate job/check должен завершаться только после всех проверок), требовать актуальную ветку перед merge по принятой политике, при необходимости approvals, запретить force-push/deletion и прямой push; отключить bypass для admins/bots либо ограничить его аварийным процессом. Проверить, что ruleset действительно active и check names совпадают с GitHub UI.
+- `.github/workflows/ci.yml` запускает проверки и на PR, но сам workflow не включает branch protection и не может гарантировать запрет merge при красном статусе. Release job выполняется только для push в `main` после успешного verify; PR не выпускает релизы.
+- Эта схема предотвращает штатный merge при failed required checks, но не исключает flaky tests, сбой/изменение окружения или регрессию, выявленную после merge. При красном post-merge CI остановить дальнейшие изменения/release по ситуации, локализовать причину, исправить через PR; если дефект уже попал пользователям — подготовить patch/hotfix с новым SemVer и changelog. Откат выполнять отдельным проверенным PR, не переписывая опубликованную историю.

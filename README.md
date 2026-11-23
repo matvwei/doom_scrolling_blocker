@@ -83,6 +83,10 @@ Edge:
 
 After installation, configure services directly from the popup. **Settings** switches the popup to its built-in settings view without opening another tab. It includes limits, actions, redirect URLs, messages, YouTube scope, interface language, and custom sites. The full `options.html` page remains available as a fallback through **Extensions → Doomscroll Blocker → Details → Extension options**.
 
+## Contributing and safe releases
+
+The normal path to `main` is: run local checks → open a pull request → wait for all required CI checks → obtain required review → merge → verify post-merge CI and the expected release. CI runs on pull requests, but workflow YAML does not enforce branch protection. Repository administrators must configure and verify an active `main` ruleset requiring PRs and all verify checks, blocking routine direct pushes, force-push and branch deletion, and disabling bypass except for an explicitly approved, documented emergency process. Releases are published only after successful verification on a push to `main`; pull requests never publish. Required checks cannot prevent flaky or post-merge/environment failures; investigate and fix through a PR, or use a reviewed revert/versioned hotfix as appropriate.
+
 ## Tests
 
 ```bash

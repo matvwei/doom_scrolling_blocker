@@ -40,3 +40,8 @@ added under the version being prepared, before its version bump is committed.
 
 - Add GitHub Actions CI for pushes to `main` and pull requests: install locked npm dependencies and Playwright Chromium on the ephemeral runner, then run unit tests, type-checking, Chrome/Edge builds, and browser E2E.
 - Keep Playwright browser binaries and system libraries confined to CI/test environments; they are not extension dependencies or packaged extension assets. No Docker configuration was added because the repository has no Docker build/test setup and GitHub-hosted runners provide the required isolated environment.
+
+## [0.6.1]
+
+- Upgrade GitHub Actions checkout and setup-node to v5, whose upstream action metadata declares the Node 24 runtime, removing the deprecated Node 20 runner warning.
+- Document the safe-main roadmap and the required manual GitHub ruleset/branch-protection configuration: PR-only normal changes, required verify checks, no routine direct push or bypass, review, merge, and post-merge release verification. Clarify that workflow YAML alone cannot enforce branch protection and that flaky/post-merge failures need a PR-based fix, revert, or versioned hotfix.

@@ -32,3 +32,9 @@ Own GitHub Actions workflows and repository automation under `.github/`.
 ## Child DOX Index
 
 No child instruction files.
+
+## Safe path to main
+
+- Intended roadmap: local checks → PR → all required checks green → review → merge → verify post-merge checks and release.
+- CI runs on PRs and pushes, but workflow YAML cannot enforce merge policy. Repository administrators must configure and verify an active `main` ruleset/branch protection: require PRs and all verify checks, prohibit ordinary direct pushes, force-push and deletion, and disable admin/bot bypass except a separately approved, documented emergency process. Select check names as shown by GitHub after a successful run.
+- The release job must remain gated by successful `verify`, a push event and `refs/heads/main`; PRs never release. A red post-merge run may still result from flakes, environment changes, or post-merge regressions; investigate and fix through PR, or use a versioned hotfix/revert PR when needed.
