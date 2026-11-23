@@ -1,4 +1,4 @@
-name: CI
+name: CI and Release
 
 on:
   push:
@@ -26,8 +26,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Browser binaries and OS libraries stay on the ephemeral CI runner;
-      # they are not npm production dependencies or part of the extension output.
+      # Browser binaries and OS libraries stay on the ephemeral CI runner.
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
@@ -45,3 +44,45 @@ jobs:
 
       - name: Run browser E2E tests
         run: xvfb-run -a npm run test:e2e
+
+  release:
+    name: Publish GitHub Release
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: release-${{ github.repository }}-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate version, changelog, and unused tag
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "package.json version is not stable SemVer: $version" >&2
+            exit 1
+          fi
+          tag="v$version"
+          if ! grep -Fqx "## [$version]" CHANGELOG.md && ! grep -Fqx "## $version" CHANGELOG.md; then
+            echo "CHANGELOG.md must contain a heading for $version" >&2
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags "https://github.com/${GITHUB_REPOSITORY}.git" "refs/tags/$tag" | grep -q .; then
+            echo "Release tag $tag already exists; bump package version before pushing." >&2
+            exit 1
+          fi
+          echo "Validated version $version and unused tag $tag"
+
+      - name: Publish release with generated notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          tag="v$version"
+          gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" --generate-notes

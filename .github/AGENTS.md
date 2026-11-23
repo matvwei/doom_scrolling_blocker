@@ -6,7 +6,7 @@ Own GitHub Actions workflows and repository automation under `.github/`.
 
 ## Ownership
 
-- `.github/workflows/ci.yml` verifies the extension on pushes to `main` and pull requests targeting `main`.
+- `.github/workflows/ci.yml` verifies the extension on pushes to `main` and pull requests targeting `main`; after successful verification only, a push to `main` publishes a GitHub Release.
 - `.github/copilot-instructions.md` provides concise contributor guidance; repository-wide requirements remain in the root `AGENTS.md`.
 
 ## Local Contracts
@@ -14,17 +14,19 @@ Own GitHub Actions workflows and repository automation under `.github/`.
 - CI uses Node.js 22 and the committed npm lockfile (`npm ci`).
 - CI installs Playwright Chromium and its system dependencies on the ephemeral runner, then runs unit tests, type-checking, Chrome/Edge builds, and browser E2E.
 - Playwright browser binaries are test-environment assets only. Never add them to extension dependencies, `.output/`, publication archives, or browser-installable extension output.
-- Keep workflow permissions minimal and workflow triggers aligned with `main`.
+- Keep workflow permissions minimal and workflow triggers aligned with `main`. The verify job is read-only; release alone gets `contents: write`.
+- Release uses `v<package.json version>`, requires a stable SemVer and matching CHANGELOG heading, rejects a remotely existing tag, and generates notes with GitHub release-note generation. Release concurrency is serialized; PRs never publish.
+- A version bump and changelog entry are required for each meaningful change. A push without a new unused version fails safely rather than reusing a tag.
 
 ## Work Guidance
 
-- Keep the workflow focused on validation; do not add release, tag, publishing, or deployment steps without explicit user approval.
+- Release automation is explicitly approved: publish only after verify succeeds and only for pushes to `main`. Never manually create a tag/release as part of ordinary local implementation or verification.
 - Update root `AGENTS.md`, `CHANGELOG.md`, and relevant project documentation whenever CI policy changes.
 - Do not modify generated build output or `.a0proj/`.
 
 ## Verification
 
-- Run the exact test/build commands represented by the workflow locally when feasible.
+- Run the exact test/build commands represented by the workflow locally when feasible. Inspect release gating, tag uniqueness, token permissions, and confirm pull requests cannot reach publishing.
 - Check workflow diff and `git diff --check`; verify browser binaries remain outside the repository and extension output.
 
 ## Child DOX Index

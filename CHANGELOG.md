@@ -14,11 +14,18 @@ added under the version being prepared, before its version bump is committed.
 - Every logical change, including documentation-only changes, requires a version
   bump and a changelog entry describing the change. Keep package files in sync
   with `npm version <version> --no-git-tag-version`.
-- Use a Conventional Commit and push the verified commit to `origin main`.
-  A commit/push and a version bump do not publish a GitHub Release or create the
-  `releases/latest` API endpoint. Create a tag or GitHub Release only when the
-  user explicitly asks; update checks report a GitHub version only after an
-  actual release is published.
+- Use a Conventional Commit and push the verified commit to `origin main`. Each
+  successful push to `main` publishes a GitHub Release after CI passes, tagged
+  `v<package.json version>` with generated release notes. A version bump and
+  matching changelog entry are mandatory for each meaningful change; CI rejects
+  invalid versions, missing changelog headings, or an already-used tag. PRs do
+  not publish releases. The release job needs the repository `GITHUB_TOKEN`
+  permission `contents: write`; never manually create tags/releases for a routine
+  change.
+
+## [0.6.0]
+
+- Publish a GitHub Release automatically after all checks pass for each push to `main`, using the bumped package version as a unique `vX.Y.Z` tag and GitHub-generated release notes. Reject missing changelog entries and reused tags; pull requests never publish.
 
 ## [0.4.2]
 

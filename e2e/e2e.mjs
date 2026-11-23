@@ -402,15 +402,15 @@ async function main() {
       'https://api.github.com/repos/matvwei/doom_scrolling_blocker/releases/latest',
       (route) => route.fulfill({
         contentType: 'application/json',
-        body: JSON.stringify({ tag_name: 'v0.5.1' }),
+        body: JSON.stringify({ tag_name: 'v0.6.1' }),
       }),
     );
     await popupPage.goto(`chrome-extension://${extensionId}/popup.html`);
-    await popupPage.getByText('Доступна версия 0.5.1').waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
-    check('popup показывает текущую версию из manifest', await popupPage.getByText('v0.5.0').isVisible());
+    await popupPage.getByText('Доступна версия 0.6.1').waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+    check('popup показывает текущую версию из manifest', await popupPage.getByText('v0.6.0').isVisible());
     check(
       'popup показывает доступную версию GitHub',
-      await popupPage.getByText('Доступна версия 0.5.1').isVisible(),
+      await popupPage.getByText('Доступна версия 0.6.1').isVisible(),
     );
     check(
       'кнопка обновления ведёт к последнему релизу GitHub',
@@ -437,7 +437,7 @@ async function main() {
     );
     check(
       'английский popup показывает обновление на выбранном языке',
-      await popupPage.getByText('Version 0.5.1 is available').isVisible(),
+      await popupPage.getByText('Version 0.6.1 is available').isVisible(),
     );
     check('выбранный язык сохраняется', (await readStoredConfig())?.language === 'en');
     await checkGeometry(check, 'popup dashboard EN: геометрия без overflow', popupPage);

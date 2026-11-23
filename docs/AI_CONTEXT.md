@@ -7,7 +7,7 @@ This file is a practical snapshot for AI agents. Mandatory workflow rules are in
 - Product: Doomscroll Blocker, Manifest V3 for Chrome and Edge.
 - Repository: `https://github.com/matvwei/doom_scrolling_blocker.git`.
 - Main branch: `main`; remote: `origin`.
-- Current application version: **0.5.0**.
+- Current application version: **0.6.0**.
 - Runtime dependencies: React 18 and React DOM 18.
 - Toolchain: WXT 0.21, TypeScript 5.9, Vite through WXT, Vitest 3, React Testing Library, Playwright.
 - No backend. Configuration and usage are local; the only external request is the public GitHub latest-release check from the popup.
@@ -78,7 +78,7 @@ This file is a practical snapshot for AI agents. Mandatory workflow rules are in
 
 ## Test snapshot
 
-At version 0.5.0 the verified baseline is:
+At version 0.6.0 the verified baseline is:
 
 - **181 unit/component tests** across 12 test files.
 - **126 E2E assertions** across 25 scenarios.
@@ -107,7 +107,7 @@ Cover grant/denial, already-open tabs, registration reconciliation after restart
 
 ### Release/version
 
-Use SemVer and add a `CHANGELOG.md` entry for every logical change, including documentation-only changes: MAJOR for incompatible behavior/API/configuration/storage (document migration), MINOR for backward-compatible functionality including CI automation, PATCH for fixes/docs/instructions/refactoring without API change. Keep package files and changelog aligned; use `npm version <version> --no-git-tag-version`. Update fake manifest versions and use a newer mock GitHub release when testing update availability. The popup checks the browser update service independently from GitHub Releases; if no GitHub latest release is published (for example, API 404), it quietly shows no GitHub version/link and core functionality remains available. A version bump, commit, and push do not publish a GitHub Release or create the `releases/latest` API endpoint. Build to verify the manifest. Commit and push are mandatory per `AGENTS.md`; tags/releases require an explicit user request.
+Use SemVer and add a `CHANGELOG.md` entry for every logical change, including documentation-only changes: MAJOR for incompatible behavior/API/configuration/storage (document migration), MINOR for backward-compatible functionality including CI automation, PATCH for fixes/docs/instructions/refactoring without API change. Keep package files and changelog aligned; use `npm version <version> --no-git-tag-version`. Update fake manifest versions and use a newer mock GitHub release when testing update availability. The popup checks the browser update service independently from GitHub Releases; if no GitHub latest release is published (for example, API 404), it quietly shows no GitHub version/link and core functionality remains available. A successful push to `main` publishes a GitHub Release after verify succeeds, tagged `v<version>` with generated notes; pull requests never publish. The workflow requires stable SemVer, a matching changelog heading, and an unused remote tag. It grants `contents: write` only to the release job and serializes release runs. A push without a version bump is rejected because the tag is already used. Build to verify the manifest. Commit and push are mandatory per `AGENTS.md`; a push that triggers publication requires explicit approval; never create the tag/release manually.
 
 ## Documentation map
 

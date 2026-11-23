@@ -1,6 +1,6 @@
 # Спецификация: Doomscroll Blocker
 
-Версия приложения: **0.4.1**. Репозиторий: `matvwei/doom_scrolling_blocker`, ветка `main`.
+Версия приложения: **0.6.0**. Репозиторий: `matvwei/doom_scrolling_blocker`, ветка `main`.
 Обязательные правила разработки и работы ИИ: `AGENTS.md`; практическая карта модулей:
 `docs/AI_CONTEXT.md`; краткие правила Copilot: `.github/copilot-instructions.md`.
 
@@ -215,9 +215,9 @@ interface CustomSiteConfig extends ServiceConfig {
     версия и ссылка «Обновить дополнение». Если GitHub Releases API отвечает
     404 (релиз ещё не опубликован) или недоступен, GitHub-проверка считается
     отсутствующей: текущая версия остаётся видимой, ложная ссылка не появляется,
-    а штатная browser-проверка и остальные функции продолжают работать. Bump,
-    commit и push не создают endpoint `releases/latest`; нужен опубликованный
-    GitHub Release. Автоустановки ZIP с GitHub нет: для unpacked-расширения
+    а штатная browser-проверка и остальные функции продолжают работать. После
+    успешного CI push в `main` публикует GitHub Release автоматически; до
+    публикации endpoint `releases/latest` может быть недоступен. Автоустановки ZIP с GitHub нет: для unpacked-расширения
     ссылка открывает опубликованный релиз для ручного обновления.
     Ошибка сети/API не мешает основным функциям popup.
   - Язык интерфейса: общий `LanguageSwitcher` в dashboard и настройках переключает
@@ -425,9 +425,15 @@ hooks/            useExtensionData — данные из storage для React;
   инструкций и рефакторинга без смены API. Сверяй changelog и package-файлы.
   `npm version <версия> --no-git-tag-version` обновляет package manifest и
   lockfile; WXT переносит версию в расширение при сборке. Commit/push и bump
-  сами по себе не создают GitHub Release или `releases/latest`: endpoint
-  появляется только при фактической публикации релиза. Теги и публичные
-  GitHub Releases создаются только по явному запросу.
+  после успешного CI каждый push в `main` автоматически публикует GitHub
+  Release с тегом `v<package.json.version>` и GitHub-generated release notes;
+  pull request релиз не создаёт. Workflow проверяет stable SemVer, наличие
+  заголовка текущей версии в `CHANGELOG.md` и отсутствие удалённого тега,
+  получает `contents: write` только в release job и сериализует публикации.
+  Повторный/пропущенный version bump блокирует публикацию, поэтому каждый
+  meaningful change обязан повышать версию и добавлять changelog entry.
+  Публикация запускается push-ом и является публичным действием: требуется
+  явное согласование такого push; локально вручную тег/релиз не создавать.
 - Для кода обязательны `npm test`, `npm run compile`, `npm run build`,
   `npm run build:edge`, `xvfb-run -a npm run test:e2e`. GitHub Actions повторяет весь набор
   и устанавливает Playwright Chromium только на CI runner. Нельзя объявлять

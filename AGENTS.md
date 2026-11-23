@@ -51,7 +51,7 @@ npm version <new-version> --no-git-tag-version
 - Коммить только относящиеся к задаче файлы; не добавляй чужие изменения без запроса.
 - Формат сообщений: `feat: ...`, `fix: ...`, `docs: ...`, `refactor: ...`, `test: ...`, `chore: ...`.
 - Push после каждого такого коммита разрешён и обязателен по постоянному правилу пользователя.
-- Теги, GitHub Releases, публикацию в магазины и другие публичные релизные действия выполняй только при явном запросе пользователя; обычный commit+push не создаёт релиз автоматически.
+- Каждый push в `main` после успешного CI автоматически публикует GitHub Release с тегом `v<package.json.version>` и автоматически сгенерированными GitHub release notes. Pull request релиз не создаёт. Workflow выделяет публикацию в job после всех проверок, использует `GITHUB_TOKEN` с `contents: write`, сериализует публикации и отклоняет неверный SemVer, отсутствующую запись текущей версии в `CHANGELOG.md` или уже существующий тег. Поэтому каждый meaningful change обязан иметь bump версии и changelog; повторная версия блокирует push-релиз. Не создавать тег/релиз вручную при локальной работе. Push, запускающий публичную публикацию, требует отдельного явного согласования в текущей задаче; согласие на обычный push само по себе недостаточно.
 - Не делай force push, reset/rebase опубликованной истории или удаление веток без отдельного явного запроса.
 
 ## 4. Архитектурные границы
@@ -62,7 +62,7 @@ npm version <new-version> --no-git-tag-version
 - `entrypoints/content.ts` — heartbeat, SPA-сигналы, Shadow DOM overlay, звук и защита overlay от DOM-вмешательства.
 - `components/`, `entrypoints/popup/`, `entrypoints/options/`, `hooks/` — React UI и доступ к данным через адаптеры; не дублируй бизнес-логику.
 - `tests/` — Vitest + React Testing Library; `e2e/` — Playwright с реальным браузером и локальными/mocked ответами.
-- `.github/workflows/ci.yml` запускает обязательные проверки на push в `main` и pull request; Playwright Chromium устанавливается только в изолированную CI-среду, вне production extension и артефактов расширения.
+- `.github/workflows/ci.yml` запускает обязательные проверки на push в `main` и pull request; только успешный push в `main` после verify публикует GitHub Release. Playwright Chromium устанавливается только в изолированную CI-среду, вне production extension и артефактов расширения.
 
 ## 5. Инварианты, которые нельзя нарушать
 
@@ -135,7 +135,7 @@ npm run build:edge
 xvfb-run -a npm run test:e2e
 ```
 
-GitHub Actions выполняет эти проверки на `main` и pull request. Для локального E2E установи только тестовый браузер командой `npx playwright install chromium` (на Linux при необходимости — `npx playwright install --with-deps chromium`). На Linux headed E2E запускается через `xvfb-run -a npm run test:e2e` (GitHub Actions делает так же). Chromium и системные библиотеки остаются в тестовой среде и не включаются в extension build/ZIP. Не добавляй Docker только ради CI: используемый workflow работает на изолированном GitHub-hosted runner.
+GitHub Actions выполняет эти проверки на `main` и pull request; после успешного набора проверок push в `main` также запускает автоматический релиз. Для локального E2E установи только тестовый браузер командой `npx playwright install chromium` (на Linux при необходимости — `npx playwright install --with-deps chromium`). На Linux headed E2E запускается через `xvfb-run -a npm run test:e2e` (GitHub Actions делает так же). Chromium и системные библиотеки остаются в тестовой среде и не включаются в extension build/ZIP. Не добавляй Docker только ради CI: используемый workflow работает на изолированном GitHub-hosted runner.
 
 Можно начать с focused tests, но финальный прогон должен быть полным. Для изменений только документации допустимы проверка ссылок/диффов, `npm run compile`, `npm run build`, `npm run build:edge`; полный unit/E2E запускай, если затронуты ожидаемые версии, fixtures или тестовые сценарии.
 
