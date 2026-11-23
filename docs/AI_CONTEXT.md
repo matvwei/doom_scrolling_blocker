@@ -7,7 +7,7 @@ This file is a practical snapshot for AI agents. Mandatory workflow rules are in
 - Product: Doomscroll Blocker, Manifest V3 for Chrome and Edge.
 - Repository: `https://github.com/matvwei/doom_scrolling_blocker.git`.
 - Main branch: `main`; remote: `origin`.
-- Current application version: **0.6.1**.
+- Current application version: **0.7.0**.
 - Runtime dependencies: React 18 and React DOM 18.
 - Toolchain: WXT 0.21, TypeScript 5.9, Vite through WXT, Vitest 3, React Testing Library, Playwright.
 - No backend. Configuration and usage are local; the only external request is the public GitHub latest-release check from the popup.
@@ -74,7 +74,7 @@ This file is a practical snapshot for AI agents. Mandatory workflow rules are in
 - No mandatory `<all_urls>`; denied custom-site permission prevents saving.
 - New config saves invalidate stale pending drafts.
 - All system UI strings exist in both locales; user messages/site names remain user-authored.
-- GitHub release links are manual for unpacked installations; do not claim ZIP auto-installation.
+- GitHub Releases attach versioned Chrome/Edge ZIPs containing only their respective WXT output directories. Users must extract an archive and select the extracted browser output folder with `manifest.json` via Load unpacked; never claim direct ZIP installation. One-click installation requires the browser stores.
 
 ## Test snapshot
 
@@ -111,7 +111,7 @@ Use SemVer and add a `CHANGELOG.md` entry for every logical change, including do
 
 ## Safe-main roadmap
 
-Local checks → PR → all required verify checks pass → review/approval → merge → verify post-merge checks and expected release. GitHub Actions runs on PRs but cannot itself enforce branch protection. Repository admins must activate and verify a `main` ruleset/branch protection requiring PRs and all verify checks, blocking routine direct pushes, force-push and deletion, with bypass disabled except an explicitly approved and documented emergency process. The release job remains gated to successful verification on push to `main`; PRs never publish. Flaky, environment, or post-merge failures remain possible: investigate and fix through PR, or use a reviewed revert/hotfix with a new version and changelog when appropriate.
+Local checks → PR → all required verify checks pass → review/approval → merge → verify post-merge checks and expected release. GitHub Actions runs on PRs but cannot itself enforce branch protection. Repository admins must activate and verify a `main` ruleset/branch protection requiring PRs and all verify checks, blocking routine direct pushes, force-push and deletion, with bypass disabled except an explicitly approved and documented emergency process. The release job remains gated to successful verification on push to `main`; PRs never publish. After verify, it installs locked dependencies, rebuilds Chrome and Edge, packages only `.output/chrome-mv3` and `.output/edge-mv3` as `doomscroller-chrome-v<version>.zip` and `doomscroller-edge-v<version>.zip`, and attaches both assets to the release. Never archive the whole `.output/`, E2E output, browser binaries, `node_modules`, or secrets. Flaky, environment, or post-merge failures remain possible: investigate and fix through PR, or use a reviewed revert/hotfix with a new version and changelog when appropriate.
 
 ## Documentation map
 

@@ -78,11 +78,38 @@ jobs:
           fi
           echo "Validated version $version and unused tag $tag"
 
-      - name: Publish release with generated notes
+      - name: Set up Node.js for release builds
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Build Chrome extension
+        run: npm run build
+
+      - name: Build Edge extension
+        run: npm run build:edge
+
+      - name: Package browser extensions
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          mkdir -p release-assets
+          (cd .output && zip -qr "${GITHUB_WORKSPACE}/release-assets/doomscroller-chrome-v${version}.zip" chrome-mv3)
+          (cd .output && zip -qr "${GITHUB_WORKSPACE}/release-assets/doomscroller-edge-v${version}.zip" edge-mv3)
+          test -s "release-assets/doomscroller-chrome-v${version}.zip"
+          test -s "release-assets/doomscroller-edge-v${version}.zip"
+
+      - name: Publish release with generated notes and browser archives
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           version="$(node -p "require('./package.json').version")"
           tag="v$version"
-          gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" --generate-notes
+          gh release create "$tag" \
+            "release-assets/doomscroller-chrome-v${version}.zip" \
+            "release-assets/doomscroller-edge-v${version}.zip" \
+            --target "$GITHUB_SHA" --title "$tag" --generate-notes

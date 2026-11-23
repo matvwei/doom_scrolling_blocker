@@ -3,6 +3,10 @@
 This file records user-visible changes for each application version. Entries are
 added under the version being prepared, before its version bump is committed.
 
+## [0.7.0]
+
+- Attach separate versioned Chrome and Edge extension ZIP archives to each successful GitHub Release. Archives contain only the respective production WXT output folder; instructions require extraction before loading unpacked and distinguish store installation.
+
 ## Versioning and release workflow
 
 - Follow Semantic Versioning (`MAJOR.MINOR.PATCH`) for stable releases.
