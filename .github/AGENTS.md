@@ -15,7 +15,7 @@ Own GitHub Actions workflows and repository automation under `.github/`.
 - CI installs Playwright Chromium and its system dependencies on the ephemeral runner, then runs unit tests, type-checking, Chrome/Edge builds, and browser E2E.
 - Playwright browser binaries are test-environment assets only. Never add them to extension dependencies, `.output/`, publication archives, or browser-installable extension output.
 - Keep workflow permissions minimal and workflow triggers aligned with `main`. The verify job is read-only; release alone gets `contents: write`.
-- Release uses `v<package.json version>`, requires a stable SemVer and matching CHANGELOG heading, rejects a remotely existing tag, and generates notes with GitHub release-note generation. Release concurrency is serialized; PRs never publish.
+- Release uses `v<package.json version>`, requires a stable SemVer and matching CHANGELOG heading, rejects a remotely existing tag, and generates notes with GitHub release-note generation. Release concurrency is serialized; PRs never publish. After successful verify, the release job installs locked dependencies, rebuilds both browsers, archives only `.output/chrome-mv3` and `.output/edge-mv3` as versioned assets, and attaches them to `gh release create`. Never archive the whole `.output/`, Playwright Chromium, `node_modules`, or secrets. Users must extract a release ZIP and load the extracted folder; do not promise direct ZIP installation.
 - A version bump and changelog entry are required for each meaningful change. A push without a new unused version fails safely rather than reusing a tag.
 
 ## Work Guidance

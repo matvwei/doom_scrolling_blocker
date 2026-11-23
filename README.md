@@ -13,7 +13,7 @@ There is no custom backend: configuration and statistics are stored in `chrome.s
 - **Instagram Reels** — the `/` feed, `/reels/*`, and `/reel/*`; profiles, posts, and messages are unaffected.
 - **TikTok** — the entire site.
 - **Custom sites** — add rules through the settings UI without JSON: `https://example.com` blocks the domain and its subdomains, while `https://example.com/section` blocks one section. Each site has independent counters and settings.
-- **Version and updates** — the popup shows the current manifest version, requests a browser update through `chrome.runtime.requestUpdateCheck()`, and compares the version with the latest published GitHub Release. If no GitHub Release exists yet (the latest-release API returns 404), the GitHub check is simply unavailable; this does not affect the browser's independent update check or other features. If the browser cannot install an available update automatically, an **Update extension** button links to the published release. Each push to `main` publishes a GitHub Release automatically only after the complete CI suite passes. The release is tagged `v<package.json version>` and uses GitHub-generated release notes; pull requests never publish. CI requires a stable SemVer version, a matching `CHANGELOG.md` heading, and a tag not already present remotely; a missing bump therefore fails rather than reusing a tag. The release job alone has `contents: write` via `GITHUB_TOKEN`. Each meaningful change needs a version bump and changelog entry. A push is now a public release action, so obtain explicit approval before pushing. ZIP files from GitHub are not installed programmatically: developer-mode installations require a manual update.
+- **Version and updates** — the popup shows the current manifest version, requests a browser update through `chrome.runtime.requestUpdateCheck()`, and compares the version with the latest published GitHub Release. If no GitHub Release exists yet (the latest-release API returns 404), the GitHub check is simply unavailable; this does not affect the browser's independent update check or other features. If the browser cannot install an available update automatically, an **Update extension** button links to the published release. Each push to `main` publishes a GitHub Release automatically only after the complete CI suite passes. The release is tagged `v<package.json version>` and uses GitHub-generated release notes; pull requests never publish. CI requires a stable SemVer version, a matching `CHANGELOG.md` heading, and a tag not already present remotely; a missing bump therefore fails rather than reusing a tag. The release job alone has `contents: write` via `GITHUB_TOKEN`. Each meaningful change needs a version bump and changelog entry. A push is now a public release action, so obtain explicit approval before pushing. GitHub Releases provide separate versioned Chrome and Edge ZIP archives containing only the built extension files. A ZIP is not directly installable as an unpacked extension: extract it, then use **Load unpacked** and select the extracted `chrome-mv3` or `edge-mv3` directory containing `manifest.json`. One-click installation requires publishing through the Chrome Web Store or Microsoft Edge Add-ons; these release ZIPs are for manual/developer-mode installation and are not represented as store-ready submission packages.
 - **Immediate limits** — 0 minutes means “block immediately”: the action runs when a tracked page first opens.
 - Only active time is counted: the tab is active, its window is focused, and the document is visible.
 - Two independent limits per target: session (reset after 10 minutes of inactivity) and day (reset at local midnight).
@@ -64,7 +64,7 @@ npm run dev          # WXT dev server with automatic rebuilds
 ```bash
 npm run build        # Chrome MV3 -> .output/chrome-mv3
 npm run build:edge   # Edge MV3   -> .output/edge-mv3
-npm run zip          # Publication archives -> .output/*-mv3.zip
+npm run zip          # Optional WXT archives -> .output/*-mv3.zip
 ```
 
 ## Manual installation
@@ -73,13 +73,15 @@ Chrome:
 
 1. Open `chrome://extensions`.
 2. Enable **Developer mode**.
-3. Click **Load unpacked** and select `.output/chrome-mv3`.
+3. Download the Chrome ZIP from the GitHub Release and extract it.
+4. Click **Load unpacked** and select the extracted `chrome-mv3` folder (the folder containing `manifest.json`).
 
 Edge:
 
 1. Open `edge://extensions`.
 2. Enable **Developer mode**.
-3. Click **Load unpacked** and select `.output/edge-mv3`.
+3. Download the Edge ZIP from the GitHub Release and extract it.
+4. Click **Load unpacked** and select the extracted `edge-mv3` folder (the folder containing `manifest.json`).
 
 After installation, configure services directly from the popup. **Settings** switches the popup to its built-in settings view without opening another tab. It includes limits, actions, redirect URLs, messages, YouTube scope, interface language, and custom sites. The full `options.html` page remains available as a fallback through **Extensions → Doomscroll Blocker → Details → Extension options**.
 

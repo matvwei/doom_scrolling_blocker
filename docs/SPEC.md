@@ -217,8 +217,13 @@ interface CustomSiteConfig extends ServiceConfig {
     отсутствующей: текущая версия остаётся видимой, ложная ссылка не появляется,
     а штатная browser-проверка и остальные функции продолжают работать. После
     успешного CI push в `main` публикует GitHub Release автоматически; до
-    публикации endpoint `releases/latest` может быть недоступен. Автоустановки ZIP с GitHub нет: для unpacked-расширения
-    ссылка открывает опубликованный релиз для ручного обновления.
+    публикации endpoint `releases/latest` может быть недоступен. В релиз
+    прикладываются отдельные версионированные ZIP Chrome и Edge, содержащие
+    только соответствующую WXT-сборку из `.output/chrome-mv3` или
+    `.output/edge-mv3`. ZIP нельзя напрямую загрузить как unpacked extension:
+    архив нужно распаковать, затем выбрать извлечённую папку с `manifest.json`.
+    Установка в один клик требует публикации через Chrome Web Store или
+    Microsoft Edge Add-ons; release ZIP не объявляется store submission package.
     Ошибка сети/API не мешает основным функциям popup.
   - Язык интерфейса: общий `LanguageSwitcher` в dashboard и настройках переключает
     `config.language` между `ru` и `en`; выбор сохраняется сразу, не сохраняя
@@ -400,7 +405,12 @@ hooks/            useExtensionData — данные из storage для React;
 - `.github/workflows/ci.yml` автоматически выполняет `npm ci`, устанавливает
   Playwright Chromium с системными Linux-зависимостями через
   `npx playwright install --with-deps chromium` и запускает unit, compile,
-  Chrome/Edge build и E2E через `xvfb-run` на push в `main` и pull request. Chromium и системные
+  Chrome/Edge build и E2E через `xvfb-run` на push в `main` и pull request.
+  После успешного verify release job повторно собирает Chrome и Edge, архивирует
+  только каталоги `.output/chrome-mv3` и `.output/edge-mv3` в
+  `doomscroller-chrome-vX.Y.Z.zip` и `doomscroller-edge-vX.Y.Z.zip`, затем
+  прикладывает оба файла к `gh release create`. Playwright Chromium,
+  `node_modules`, `.output` вне этих двух папок и секреты в архивы не входят. Chromium и системные
   библиотеки существуют только на эфемерном runner; они не входят в npm
   production dependencies, `.output/` или ZIP расширения. Локально для E2E
   достаточно `npx playwright install chromium` (Linux deps — только если
